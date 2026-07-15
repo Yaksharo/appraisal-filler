@@ -154,11 +154,32 @@ jobs:
     needs: build
     if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write   # required for keyless Sigstore signing
     steps:
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
           path: dist
+
+      # Keyless Sigstore signing: no private key/secret to manage. cosign
+      # gets a short-lived cert from Fulcio tied to this workflow's GitHub
+      # OIDC identity, signs a checksum manifest covering every artifact,
+      # and records it on the public Rekor transparency log. Anyone can
+      # then confirm a given download really came from this repo's build.yml
+      # (see README for the verify command) - this does NOT touch Windows
+      # Authenticode/SmartScreen/UAC, which only trust CA-issued certs.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Checksum and sign release artifacts
+        working-directory: dist
+        run: |
+          sha256sum * > SHA256SUMS
+          cosign sign-blob --yes SHA256SUMS \
+            --output-signature SHA256SUMS.sig \
+            --output-certificate SHA256SUMS.pem
 
       # Tag pushes (v1.0, v2.3...) publish a normal versioned release.
       # Manual "Run workflow" runs (no tag) publish/update a rolling

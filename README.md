@@ -65,6 +65,32 @@ Windows and Linux machines, so you never build on your own computer.
   and attaches them to a proper versioned Release page instead of the
   rolling "latest" one.
 
+## Verifying a release (Sigstore)
+
+Every release includes `SHA256SUMS`, `SHA256SUMS.sig`, and
+`SHA256SUMS.pem`. These prove the published files were built by this
+repo's `build.yml` on GitHub's runners and haven't been altered since,
+using [Sigstore](https://www.sigstore.dev/) keyless signing (no private
+key to leak, verifiable against the public Rekor transparency log).
+This is a supply-chain integrity check, not a Windows/Authenticode
+signature - it won't change the SmartScreen or "Unknown Publisher"
+prompt, which come from a separate, CA-based trust system.
+
+To verify with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/):
+
+```
+cosign verify-blob \
+  --certificate SHA256SUMS.pem \
+  --signature SHA256SUMS.sig \
+  --certificate-identity-regexp "^https://github.com/Yaksharo/appraisal-filler/" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS
+```
+
+Then confirm your downloaded file's hash appears in `SHA256SUMS`
+(`sha256sum -c SHA256SUMS` on Linux, `certutil -hashfile <file> SHA256`
+on Windows).
+
 ## Startup speed
 
 Builds use PyInstaller's onedir mode: the app is a folder with the
