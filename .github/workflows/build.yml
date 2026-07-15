@@ -1,0 +1,164 @@
+name: Build executables
+
+# Two ways to get builds:
+#  1. Actions tab -> "Build executables" -> Run workflow -> download artifacts
+#  2. Push a tag like v1.0 -> a GitHub Release is created with everything
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            sep: ";"
+            iconflag: "--icon=assets/logo.ico"
+          - os: ubuntu-latest
+            sep: ":"
+            iconflag: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      # onedir (a folder, not a single file) starts in about a second;
+      # onefile has to unpack ~120 MB to a temp dir on EVERY launch.
+      - name: Build app folder
+        run: >
+          pyinstaller --onedir --windowed --name AdviseeDocFiller
+          --add-data "templates_docx${{ matrix.sep }}templates_docx"
+          --add-data "assets${{ matrix.sep }}assets"
+          --hidden-import docxcompose --collect-data docxcompose
+          ${{ matrix.iconflag }}
+          gui_app.py
+
+      - name: Zip Windows build (portable, copy-paste anywhere)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: Compress-Archive -Path dist/AdviseeDocFiller -DestinationPath AdviseeDocFiller-windows-portable.zip
+
+      - name: Upload Windows portable artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdviseeDocFiller-windows-portable
+          path: AdviseeDocFiller-windows-portable.zip
+
+      - name: Compute version
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$VERSION" in
+            ""|main|master|*/*) VERSION="1.0" ;;
+          esac
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Build Windows installer (Inno Setup)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            "/DMyAppVersion=$env:APP_VERSION" installer.iss
+
+      - name: Upload Windows installer artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdviseeDocFiller-windows-setup
+          path: Output/AdviseeDocFiller-Setup-*.exe
+
+      - name: Tar Linux build
+        if: matrix.os == 'ubuntu-latest'
+        run: tar -czf AdviseeDocFiller-linux.tar.gz -C dist AdviseeDocFiller
+
+      - name: Upload Linux portable artifact
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdviseeDocFiller-linux
+          path: AdviseeDocFiller-linux.tar.gz
+
+      - name: Package for Debian/Ubuntu, Fedora/RHEL, and Arch
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev build-essential rpm \
+            libarchive-tools zstd
+          sudo gem install --no-document fpm
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$VERSION" in
+            ""|main|master|*/*) VERSION="1.0" ;;
+          esac
+
+          STAGE=pkgroot
+          mkdir -p "$STAGE/opt" \
+                   "$STAGE/usr/share/applications" \
+                   "$STAGE/usr/share/icons/hicolor/256x256/apps" \
+                   "$STAGE/usr/bin"
+          cp -r dist/AdviseeDocFiller "$STAGE/opt/AdviseeDocFiller"
+          chmod 755 "$STAGE/opt/AdviseeDocFiller/AdviseeDocFiller"
+          install -m 644 assets/logo.png \
+            "$STAGE/usr/share/icons/hicolor/256x256/apps/adviseedocfiller.png"
+          ln -s /opt/AdviseeDocFiller/AdviseeDocFiller \
+            "$STAGE/usr/bin/adviseedocfiller"
+          cat > "$STAGE/usr/share/applications/adviseedocfiller.desktop" <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=Advisee Document Filler
+          Comment=Fill UNP CCIT Appraisal Sheets and Reports of Rating from grade listing PDFs
+          Exec=/opt/AdviseeDocFiller/AdviseeDocFiller
+          Icon=adviseedocfiller
+          Terminal=false
+          Categories=Office;
+          EOF
+
+          mkdir -p packages
+          for TARGET in deb rpm pacman; do
+            fpm -s dir -t "$TARGET" \
+              -n adviseedocfiller \
+              -v "$VERSION" \
+              --license "MIT" \
+              --maintainer "Yaksharo a.k.a Ezer" \
+              --description "Fills UNP CCIT Appraisal Sheets and Reports of Rating from Periodic Grades Listing PDFs" \
+              --url "https://github.com/${GITHUB_REPOSITORY}" \
+              -p packages/ \
+              -C "$STAGE" .
+          done
+          ls -la packages/
+
+      - name: Upload Linux packages
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: packages/*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

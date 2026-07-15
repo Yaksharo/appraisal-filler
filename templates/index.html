@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Advisee Document Filler</title>
+<link rel="icon" type="image/png"
+      href="{{ url_for('static', filename='logo.png') }}">
+<style>
+  :root {
+    --bg:#f4f7f4; --card:#ffffff; --ink:#182019; --muted:#66716a;
+    --line:#dbe2dc; --accent:#166534; --accent-ink:#ffffff;
+    --accent-soft:#e3efe6; --shadow:0 1px 3px rgba(0,0,0,.08);
+  }
+  [data-theme="dark"] {
+    --bg:#141a16; --card:#1d2520; --ink:#e6ebe7; --muted:#93a097;
+    --line:#37423a; --accent:#34b263; --accent-ink:#08120b;
+    --accent-soft:#22301f; --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#141a16; --card:#1d2520; --ink:#e6ebe7; --muted:#93a097;
+      --line:#37423a; --accent:#34b263; --accent-ink:#08120b;
+      --accent-soft:#22301f; --shadow:0 1px 3px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.5 "Segoe UI", system-ui, sans-serif;
+         transition:background .2s, color .2s; }
+  header { position:sticky; top:0; z-index:5; background:var(--card);
+           border-bottom:1px solid var(--line); box-shadow:var(--shadow); }
+  .bar { max-width:960px; margin:0 auto; padding:12px 20px;
+         display:flex; align-items:center; gap:12px; }
+  .logo { width:34px; height:34px; border-radius:9px; background:var(--accent);
+          color:var(--accent-ink); display:grid; place-items:center;
+          font-weight:700; }
+  .titles h1 { font-size:1.05rem; margin:0; }
+  .titles p { margin:0; color:var(--muted); font-size:.8rem; }
+  .spacer { flex:1; }
+  .icon-btn { background:transparent; border:1px solid var(--line);
+              color:var(--ink); border-radius:8px; padding:7px 12px;
+              cursor:pointer; font:inherit; }
+  .icon-btn:hover { background:var(--accent-soft); }
+  .wrap { max-width:960px; margin:0 auto; padding:24px 20px 80px; }
+  .card { background:var(--card); border:1px solid var(--line);
+          border-radius:12px; box-shadow:var(--shadow);
+          margin:16px 0; padding:18px 20px; }
+  .card h2 { margin:0 0 4px; font-size:1rem; }
+  .card .sub { color:var(--muted); font-size:.85rem; margin:0 0 12px; }
+  .stepnum { display:inline-grid; place-items:center; width:24px; height:24px;
+             border-radius:50%; background:var(--accent);
+             color:var(--accent-ink); font-size:.8rem; font-weight:700;
+             margin-right:8px; }
+  label { display:block; margin:10px 0 4px; font-size:.9rem; }
+  input[type=text], textarea, input[type=file] {
+      width:100%; padding:10px; border:1px solid var(--line);
+      border-radius:8px; font:inherit; background:var(--bg);
+      color:var(--ink); }
+  textarea { min-height:110px; font-family:ui-monospace, monospace;
+             font-size:.85rem; }
+  .btn { background:var(--accent); color:var(--accent-ink); border:0;
+         padding:12px 24px; border-radius:9px; font:inherit;
+         font-weight:600; cursor:pointer; }
+  .btn:hover { filter:brightness(1.08); }
+  .btn.secondary { background:transparent; color:var(--accent);
+                   border:1.5px solid var(--accent); }
+  table { border-collapse:collapse; width:100%; font-size:.85rem; }
+  th, td { border:1px solid var(--line); padding:6px 9px; text-align:left; }
+  th { background:var(--accent-soft); }
+  .check-row { display:flex; gap:22px; flex-wrap:wrap; }
+  .hint { color:var(--muted); font-size:.8rem; margin-top:6px; }
+  footer { max-width:960px; margin:0 auto; padding:20px;
+           color:var(--muted); font-size:.8rem; text-align:center; }
+  dialog { border:1px solid var(--line); border-radius:14px; padding:26px;
+           background:var(--card); color:var(--ink); max-width:430px; }
+  dialog::backdrop { background:rgba(0,0,0,.45); }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="logo">AD</div>
+    <div class="titles">
+      <h1>Advisee Document Filler</h1>
+      <p>UNP CCIT adviser tools</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="themeBtn" type="button">Dark mode</button>
+    <button class="icon-btn" type="button"
+            onclick="document.getElementById('about').showModal()">About</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <form method="post" enctype="multipart/form-data">
+    <div class="card">
+      <h2><span class="stepnum">1</span>Grade Listing PDFs</h2>
+      <p class="sub">Upload one or more Periodic Grades Listing PDFs.
+      Students are matched across PDFs by ID number.</p>
+      <input type="file" name="pdfs" accept="application/pdf" multiple required>
+      <p style="margin-top:12px">
+        <button class="btn secondary" formaction="/preview"
+                formmethod="post">Preview students</button>
+      </p>
+    </div>
+
+    {% if students %}
+    <div class="card">
+      <h2><span class="stepnum">&#10003;</span>Parsed students ({{ students|length }})</h2>
+      <p class="sub">Untick anyone you want to skip. Re-select the same PDFs
+      before generating.</p>
+      <table>
+        <tr><th></th><th>Name</th><th>ID</th><th>Course</th>
+            <th>Terms</th><th>Subjects</th></tr>
+        {% for s in students %}
+        <tr>
+          <td><input type="checkbox" name="student" value="{{ s.id }}" checked></td>
+          <td>{{ s.name }}</td>
+          <td>{{ s.id }}</td>
+          <td>{{ s.course }}</td>
+          <td>{{ s.terms|length }}</td>
+          <td>{{ s.terms.values()|map('length')|sum }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div class="card">
+      <h2><span class="stepnum">&#10003;</span>Terms to include (Report of Rating)</h2>
+      <div class="check-row">
+        {% for t in term_opts %}
+        <label style="margin:4px 0"><input type="checkbox" name="terms"
+          value="{{ t.key }}" checked> {{ t.label }}</label>
+        {% endfor %}
+      </div>
+      <p class="hint">The Appraisal Sheet always includes every term found
+      in the PDFs.</p>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <h2><span class="stepnum">2</span>Documents to generate</h2>
+      <div class="check-row">
+        <label><input type="checkbox" name="docs" value="appraisal" checked>
+          Appraisal Sheet</label>
+        <label><input type="checkbox" name="docs" value="report" checked>
+          Report of Rating</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2><span class="stepnum">3</span>Output format</h2>
+      <div class="check-row">
+        <label><input type="radio" name="output_mode" value="individual"
+          checked> Individual files (ZIP)</label>
+        <label><input type="radio" name="output_mode" value="combined">
+          One batch file (all students merged)</label>
+      </div>
+      <label style="margin-top:12px"><input type="checkbox" name="trim_rows"
+        value="yes" checked> Remove unused blank rows in the Report of
+        Rating table</label>
+    </div>
+
+    <div class="card">
+      <h2><span class="stepnum">4</span>Options</h2>
+      <label for="adviser">Adviser name (printed on the Report of Rating)</label>
+      <input type="text" name="adviser" id="adviser" value="JUAN M. DELA CRUZ">
+      <label for="faculty_map">Faculty per subject (one per line,
+        <code>CODE = Name</code>; leave the name blank to skip)</label>
+      <textarea name="faculty_map" id="faculty_map"
+        placeholder="CT103 = Juan Dela Cruz">{{ faculty_prefill or "" }}</textarea>
+      <p class="hint">After Preview, the subject codes found in your PDFs are
+      filled in here automatically. Just type the names.</p>
+    </div>
+
+    <button class="btn" formaction="/generate" formmethod="post">
+      Generate and download</button>
+  </form>
+</div>
+
+<footer>
+  Advisee Document Filler &middot; Developed by Yaksharo a.k.a Ezer
+</footer>
+
+<dialog id="about">
+  <h2 style="margin-top:0">About</h2>
+  <p><strong>Advisee Document Filler</strong> fills the UNP CCIT Appraisal
+  Sheet (VPAA-CCIT-QF-05) and Report of Rating (VPAA-CCIT-QF-09) for every
+  advisee, using the Periodic Grades Listing PDFs from the student portal.</p>
+  <p>Everything runs locally. The app binds to 127.0.0.1 only, so nothing is
+  exposed to your network.</p>
+  <p><strong>Developed by Yaksharo a.k.a Ezer</strong></p>
+  <button class="btn" onclick="document.getElementById('about').close()">
+    Close</button>
+</dialog>
+
+<script>
+  const btn = document.getElementById('themeBtn');
+  const root = document.documentElement;
+  function sysDark() {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function current() {
+    return root.dataset.theme || (sysDark() ? 'dark' : 'light');
+  }
+  function refresh() {
+    btn.textContent = current() === 'dark' ? 'Light mode' : 'Dark mode';
+  }
+  const saved = localStorage.getItem('theme');
+  if (saved) root.dataset.theme = saved;
+  refresh();
+  btn.addEventListener('click', () => {
+    const next = current() === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    localStorage.setItem('theme', next);
+    refresh();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+# Advisee Document Filler
+
+A small web system for UNP CCIT advisers. It reads Periodic Grades Listing
+PDFs from the student portal and fills two official forms for every advisee.
+
+- Appraisal Sheet (VPAA-CCIT-QF-05), one per student, all terms in one file
+- Report of Rating (VPAA-CCIT-QF-09), one per student per term
+
+## Two ways to run it
+
+### A. Standalone desktop app (recommended, no browser)
+
+A step-by-step wizard. No web server, no network, nothing exposed.
+
+From source:
+
+```
+pip install -r requirements.txt
+python gui_app.py
+```
+
+On Linux you also need Tkinter once: `sudo apt install python3-tk`
+
+As a single-file executable (no Python needed on the target machine):
+
+- Windows: run `build_windows.bat`, then use `dist\AdviseeDocFiller.exe`
+- Linux: run `./build_linux.sh`, then use `dist/AdviseeDocFiller`
+
+Build on the OS you target. PyInstaller does not cross-compile, so the
+Windows exe must be built on Windows and the Linux binary on Linux. A
+Linux binary runs on distros with the same or newer glibc than the
+build machine.
+
+### B. Web app (optional)
+
+```
+pip install -r requirements.txt
+python app.py
+```
+
+It binds to 127.0.0.1 only (loopback, not visible to your network) and
+picks a free port in the dynamic private range (49152-65535). The exact
+address is printed on start.
+
+## Build with GitHub (no local build needed)
+
+Push this project to a GitHub repository. The included workflow at
+`.github/workflows/build.yml` builds both executables on GitHub's own
+Windows and Linux machines, so you never build on your own computer.
+
+- Manual build: open the repo's Actions tab, pick "Build executables",
+  click "Run workflow", wait a few minutes, then download the two
+  artifacts (Windows exe and Linux binary).
+- Release build: create and push a tag like `v1.0`
+  (`git tag v1.0 && git push origin v1.0`). GitHub builds both binaries
+  and attaches them to a Release page you can share with other advisers.
+
+## Startup speed
+
+Builds use PyInstaller's onedir mode: the app is a folder with the
+executable inside, next to an `_internal` folder. It starts in about a
+second. The old single-file mode had to unpack everything to a temp
+directory on every launch, which is why it felt slow. Heavy libraries
+also load lazily now, so the window appears immediately and the PDF
+engine loads in the background the first time you click Next.
+
+- Windows, two options from the same build:
+  1. Installer: run `AdviseeDocFiller-Setup-1.0.exe`. It installs to
+     `C:\Program Files\Yaksharo Solutions\Advisee Document Filler`,
+     adds a Start Menu entry (and optional desktop icon), and registers
+     a normal uninstaller in Windows Settings.
+  2. Portable: download `AdviseeDocFiller-windows-portable.zip`, extract
+     it once anywhere (USB stick included), run `AdviseeDocFiller.exe`
+     inside. Copy-paste the folder to move it. Keep the exe next to its
+     `_internal` folder.
+- Linux portable: `AdviseeDocFiller-linux.tar.gz`, extract and run.
+- Linux packages install the folder to /opt and handle everything.
+
+## Linux packages (deb, rpm, Arch)
+
+The GitHub workflow also builds proper installers for the three big
+Linux families, uploaded as the `linux-packages` artifact and attached
+to Releases:
+
+- Debian / Ubuntu / Mint: `sudo apt install ./adviseedocfiller_*.deb`
+- Fedora / RHEL / openSUSE: `sudo dnf install ./adviseedocfiller-*.rpm`
+- Arch / Manjaro: `sudo pacman -U adviseedocfiller-*.pkg.tar.zst`
+
+Each package installs the app to /opt/AdviseeDocFiller, adds an
+`adviseedocfiller` command, and registers a menu entry with the app
+icon. Note: the binary inside is built on GitHub's Ubuntu runner, so it
+needs a distro with the same or newer glibc. Arch and current Fedora
+are fine; very old LTS releases may not be.
+
+## Window style
+
+- Linux: the app keeps your desktop environment's native titlebar, so
+  it automatically matches GNOME, KDE, XFCE, or whatever you run.
+- Windows: the app draws its own borderless titlebar that follows the
+  light/dark theme, with minimize, maximize/restore, and close buttons,
+  drag-to-move, double-click to maximize, and a resize grip at the
+  bottom-right.
+
+## Themes and accessibility
+
+- Desktop app: follows your system light/dark theme on startup, with a
+  toggle in the header. A- and A+ buttons resize all text.
+- Web app: follows the system theme, with a toggle that remembers your
+  choice.
+
+## How to use (web app)
+
+1. Upload one or more grade listing PDFs. You can upload the 1st and 2nd
+   term listings together. Students are matched across PDFs by ID number.
+2. Click "Preview students" to check the parsed data first.
+3. Pick which documents to generate and set the adviser name.
+4. Optional. Map instructors per subject code, one per line, like
+   `CT103 = Juan Dela Cruz`. The PDF has no instructor names, so the
+   Faculty and Instructor columns stay blank unless you map them.
+5. Pick the output format. Individual gives a ZIP with one docx per
+   student. One batch file merges every student into a single docx,
+   one student per page, ready for bulk printing.
+6. For Reports of Rating you can also untick terms you don't need.
+7. Click Generate.
+
+## How the data maps
+
+- The periodic rating column in the PDF goes to the Midterm cell of the
+  Report of Rating. The Grade column goes to the Final cell.
+- The Appraisal Sheet has four term tables. They are filled in order,
+  First Year 1st Term, First Year 2nd Term, Second Year 1st Term,
+  Second Year 2nd Term, based on the Period line in each PDF.
+- Term/SY is written as `1st/25-26` style. Change `term_sy_label` in
+  `filler.py` if your format differs.
+- Total units per term is computed and placed in the totals row.
+
+## Notes
+
+- The templates live in `templates_docx/`. Replace them with updated forms
+  as long as the table layout stays the same.
+- Unused blank rows in the Report of Rating grade table are removed
+  automatically. Untick the option in the UI to keep them.
+- Trailing empty paragraphs in the templates are stripped, so the Report
+  of Rating no longer produces a blank second page.
+- The parser targets the exact layout of the "Periodic Grades Listing"
+  report. If the registrar changes the report layout, adjust `parser.py`.
+
+## App icon
+
+The logo in `assets/` is used everywhere automatically:
+
+- Windows: the exe file icon (embedded at build time) and the window
+  and taskbar icon at runtime.
+- Linux: the window and taskbar icon at runtime. Linux binaries cannot
+  embed a file icon, so for a launcher/menu icon copy the binary and
+  `assets/logo.png` somewhere permanent (e.g. `/opt/AdviseeDocFiller/`),
+  adjust the paths inside `AdviseeDocFiller.desktop`, and copy that file
+  to `~/.local/share/applications/`.
+- Web app: the same logo is served as the favicon.
+
+## Credits
+
+Developed by Yaksharo a.k.a Ezer

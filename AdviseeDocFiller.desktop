@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Advisee Document Filler
+Comment=Fill UNP CCIT Appraisal Sheets and Reports of Rating from grade listing PDFs
+Exec=/opt/AdviseeDocFiller/AdviseeDocFiller
+Icon=/opt/AdviseeDocFiller/logo.png
+Terminal=false
+Categories=Office;
