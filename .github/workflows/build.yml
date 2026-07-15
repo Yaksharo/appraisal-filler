@@ -37,14 +37,46 @@ jobs:
 
       # onedir (a folder, not a single file) starts in about a second;
       # onefile has to unpack ~120 MB to a temp dir on EVERY launch.
+      # --noupx: UPX-compressed executables are a common heuristic trigger
+      # for "generic packer/trojan" antivirus false positives, since it's
+      # also how a lot of real malware self-packs.
       - name: Build app folder
         run: >
-          pyinstaller --onedir --windowed --name AdviseeDocFiller
+          pyinstaller --onedir --windowed --name AdviseeDocFiller --noupx
           --add-data "templates_docx${{ matrix.sep }}templates_docx"
           --add-data "assets${{ matrix.sep }}assets"
           --hidden-import docxcompose --collect-data docxcompose
           ${{ matrix.iconflag }}
           gui_app.py
+
+      # Self-signed Authenticode signing. Free, but Windows only trusts it
+      # on machines that import signing/AdviseeDocFiller-PublisherCert.cer
+      # into the Trusted Publishers store (see README) - it will NOT clear
+      # "Unknown Publisher" for the general public. No-ops until the
+      # CODE_SIGN_PFX_BASE64/CODE_SIGN_PASSWORD secrets are added.
+      - name: Import code signing certificate
+        if: matrix.os == 'windows-latest' && env.HAS_CERT_SECRET == 'true'
+        shell: pwsh
+        run: |
+          $bytes = [Convert]::FromBase64String("${{ secrets.CODE_SIGN_PFX_BASE64 }}")
+          $pfxPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, $bytes)
+          echo "PFX_PATH=$pfxPath" >> $env:GITHUB_ENV
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match 'x64' } | Select-Object -First 1 -ExpandProperty FullName
+          echo "SIGNTOOL=$signtool" >> $env:GITHUB_ENV
+        env:
+          HAS_CERT_SECRET: ${{ secrets.CODE_SIGN_PFX_BASE64 != '' }}
+
+      - name: Sign application executable
+        if: matrix.os == 'windows-latest' && env.HAS_CERT_SECRET == 'true'
+        shell: pwsh
+        run: |
+          & "$env:SIGNTOOL" sign /f "$env:PFX_PATH" /p "${{ secrets.CODE_SIGN_PASSWORD }}" `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            dist\AdviseeDocFiller\AdviseeDocFiller.exe
+        env:
+          HAS_CERT_SECRET: ${{ secrets.CODE_SIGN_PFX_BASE64 != '' }}
 
       - name: Zip Windows build (portable, copy-paste anywhere)
         if: matrix.os == 'windows-latest'
@@ -74,6 +106,16 @@ jobs:
         run: |
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
             "/DMyAppVersion=$env:APP_VERSION" installer.iss
+
+      - name: Sign installer
+        if: matrix.os == 'windows-latest' && env.HAS_CERT_SECRET == 'true'
+        shell: pwsh
+        run: |
+          & "$env:SIGNTOOL" sign /f "$env:PFX_PATH" /p "${{ secrets.CODE_SIGN_PASSWORD }}" `
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 `
+            (Get-ChildItem Output\AdviseeDocFiller-Setup-*.exe).FullName
+        env:
+          HAS_CERT_SECRET: ${{ secrets.CODE_SIGN_PFX_BASE64 != '' }}
 
       - name: Upload Windows installer artifact
         if: matrix.os == 'windows-latest'
@@ -206,3 +248,21 @@ jobs:
           name: ${{ steps.rel.outputs.name }}
           prerelease: ${{ steps.rel.outputs.prerelease }}
           files: dist/*
+
+      # Free VirusTotal multi-engine scan of every release artifact. Purely
+      # diagnostic - it does not whitelist the build with any engine, it
+      # just tells you (and anyone reading the release) what flagged it, so
+      # you know where to file a false-positive report. Results always land
+      # in this step's Job Summary; update_release_body additionally tries
+      # to append links to the release notes (may not apply to the rolling
+      # "latest" pre-release on manual runs). No-ops until VT_API_KEY is set.
+      - name: VirusTotal scan
+        if: env.HAS_VT_KEY == 'true'
+        uses: crazy-max/ghaction-virustotal@v4
+        with:
+          vt_api_key: ${{ secrets.VT_API_KEY }}
+          update_release_body: true
+          files: |
+            dist/*
+        env:
+          HAS_VT_KEY: ${{ secrets.VT_API_KEY != '' }}
