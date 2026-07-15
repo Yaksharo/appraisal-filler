@@ -1,11 +1,10 @@
-name: Publish to winget / Chocolatey
+name: Publish to winget
 
 # Manual, on-demand only - never runs on a tag push. You trigger it
 # yourself from the Actions tab for a release you've already decided is
 # ready, and by default it only builds a preview for you to inspect
 # (uploaded as a workflow artifact) rather than actually publishing
-# anywhere. Flip the winget_submit/choco_push inputs only once you're
-# satisfied with that preview.
+# anywhere. Flip winget_submit only once you're satisfied with that preview.
 on:
   workflow_dispatch:
     inputs:
@@ -14,10 +13,6 @@ on:
         required: true
       winget_submit:
         description: "Actually open the winget-pkgs PR (needs the WINGET_GH_TOKEN secret). Unchecked = preview manifest only."
-        type: boolean
-        default: false
-      choco_push:
-        description: "Actually push to the Chocolatey Community Repository (needs the CHOCO_API_KEY secret). Unchecked = build the .nupkg only."
         type: boolean
         default: false
 
@@ -84,54 +79,3 @@ jobs:
         with:
           name: winget-manifest-${{ needs.resolve.outputs.version }}
           path: manifests/**
-
-  chocolatey:
-    needs: resolve
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Look up checksum from the release's SHA256SUMS
-        shell: pwsh
-        run: |
-          $version = "${{ needs.resolve.outputs.version }}"
-          $sums = Invoke-WebRequest "https://github.com/Yaksharo/appraisal-filler/releases/download/v$version/SHA256SUMS" -UseBasicParsing
-          $line = ($sums.Content -split "`n") | Where-Object { $_ -match "AdviseeDocFiller-Setup-$version\.exe" }
-          if (-not $line) { throw "Couldn't find AdviseeDocFiller-Setup-$version.exe in that release's SHA256SUMS" }
-          $checksum = ($line -split '\s+')[0]
-          echo "CHECKSUM=$checksum" >> $env:GITHUB_ENV
-
-      - name: Fill in version, URL and checksum
-        shell: pwsh
-        run: |
-          $version = "${{ needs.resolve.outputs.version }}"
-          $installerUrl = "https://github.com/Yaksharo/appraisal-filler/releases/download/v$version/AdviseeDocFiller-Setup-$version.exe"
-          $installScript = "packaging/chocolatey/tools/chocolateyinstall.ps1"
-          (Get-Content $installScript) `
-            -replace "\`$url\s*=.*", "`$url      = '$installerUrl'" `
-            -replace "\`$checksum\s*=.*", "`$checksum = '$env:CHECKSUM'" |
-            Set-Content $installScript
-
-          (Get-Content "packaging/chocolatey/adviseedocfiller.nuspec") `
-            -replace "<version>.*</version>", "<version>$version</version>" |
-            Set-Content "packaging/chocolatey/adviseedocfiller.nuspec"
-
-      - name: choco pack
-        working-directory: packaging/chocolatey
-        shell: pwsh
-        run: choco pack adviseedocfiller.nuspec --outputdirectory .
-
-      - name: Upload package for review
-        if: inputs.choco_push == 'false'
-        uses: actions/upload-artifact@v4
-        with:
-          name: chocolatey-package-${{ needs.resolve.outputs.version }}
-          path: packaging/chocolatey/*.nupkg
-
-      - name: Push to Chocolatey
-        if: inputs.choco_push == 'true'
-        working-directory: packaging/chocolatey
-        shell: pwsh
-        run: |
-          $pkg = (Get-ChildItem *.nupkg | Select-Object -First 1).FullName
-          choco push $pkg --source https://push.chocolatey.org/ --api-key "${{ secrets.CHOCO_API_KEY }}"
