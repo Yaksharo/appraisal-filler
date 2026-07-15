@@ -1,7 +1,8 @@
 # Advisee Document Filler
 
-A small web system for UNP CCIT advisers. It reads Periodic Grades Listing
-PDFs from the student portal and fills two official forms for every advisee.
+A small tool for UNP CCIT advisers, available as a standalone desktop app
+or a local web app. It reads Periodic Grades Listing PDFs from the student
+portal and fills two official forms for every advisee.
 
 - Appraisal Sheet (VPAA-CCIT-QF-05), one per student, all terms in one file
 - Report of Rating (VPAA-CCIT-QF-09), one per student per term
@@ -31,6 +32,12 @@ Windows exe must be built on Windows and the Linux binary on Linux. A
 Linux binary runs on distros with the same or newer glibc than the
 build machine.
 
+Generated documents default to an `AdviseeDocuments` folder inside the
+user's real Documents folder (`Documents\AdviseeDocuments` on Windows,
+resolved even if OneDrive or a domain policy has redirected it;
+`~/Documents/AdviseeDocuments` on Linux, following the XDG user-dirs
+setting). Use "Browse..." on the Generate step to save elsewhere.
+
 ### B. Web app (optional)
 
 ```
@@ -49,11 +56,14 @@ Push this project to a GitHub repository. The included workflow at
 Windows and Linux machines, so you never build on your own computer.
 
 - Manual build: open the repo's Actions tab, pick "Build executables",
-  click "Run workflow", wait a few minutes, then download the two
-  artifacts (Windows exe and Linux binary).
+  click "Run workflow", wait a few minutes. This publishes/updates a
+  rolling "latest" pre-release on the repo's Releases page with every
+  build attached, so it's shareable without anyone needing to sign in
+  (unlike raw workflow-run artifacts, which are private and expire).
 - Release build: create and push a tag like `v1.0`
   (`git tag v1.0 && git push origin v1.0`). GitHub builds both binaries
-  and attaches them to a Release page you can share with other advisers.
+  and attaches them to a proper versioned Release page instead of the
+  rolling "latest" one.
 
 ## Startup speed
 
@@ -103,23 +113,33 @@ are fine; very old LTS releases may not be.
 
 ## Themes and accessibility
 
-- Desktop app: follows your system light/dark theme on startup, with a
-  toggle in the header. A- and A+ buttons resize all text.
+- Desktop app: a flat, neutral white/grey/black look with a single blue
+  accent, styled to blend in with the default light/dark themes of
+  Windows 10/11, GNOME, and KDE. Follows your system light/dark theme on
+  startup, with a toggle in the header. A- and A+ buttons resize all text.
 - Web app: follows the system theme, with a toggle that remembers your
   choice.
 
-## How to use (web app)
+## How to use
 
-1. Upload one or more grade listing PDFs. You can upload the 1st and 2nd
+Both apps walk through the same steps; the desktop wizard breaks them
+into pages (PDF Files &rarr; Students &rarr; Documents &rarr; Faculty &rarr;
+Generate), and the web app does the same work on a single page with a
+"Preview students" button.
+
+1. Add one or more grade listing PDFs. You can add the 1st and 2nd
    term listings together. Students are matched across PDFs by ID number.
-2. Click "Preview students" to check the parsed data first.
-3. Pick which documents to generate and set the adviser name.
-4. Optional. Map instructors per subject code, one per line, like
-   `CT103 = Juan Dela Cruz`. The PDF has no instructor names, so the
-   Faculty and Instructor columns stay blank unless you map them.
-5. Pick the output format. Individual gives a ZIP with one docx per
-   student. One batch file merges every student into a single docx,
-   one student per page, ready for bulk printing.
+2. Preview/check the parsed students, and untick anyone you want to skip.
+3. Pick which documents to generate.
+4. Set the adviser name and, optionally, map instructors per subject code
+   (desktop: one entry field per code; web: one per line, like
+   `CT103 = Juan Dela Cruz`). The PDF has no instructor names, so the
+   Faculty and Instructor columns stay blank unless you map them — leaving
+   the adviser or a faculty field empty also leaves it blank in the
+   generated documents, it does not fall back to a placeholder name.
+5. Pick the output format. Individual gives one docx per student
+   (zipped on the web app). One batch file merges every student into a
+   single docx, one student per page, ready for bulk printing.
 6. For Reports of Rating you can also untick terms you don't need.
 7. Click Generate.
 
