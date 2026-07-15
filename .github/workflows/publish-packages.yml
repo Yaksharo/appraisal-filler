@@ -28,9 +28,14 @@ jobs:
       - id: norm
         shell: bash
         run: |
+          # Normalize to exactly one lowercase "v" prefix, whatever you typed
+          # (1.01, v1.01, V1.01 all become v1.01) - the v is kept everywhere
+          # downstream (installer filename, PackageVersion, etc.), not
+          # stripped, so it matches the git tag exactly.
           v="${{ inputs.version }}"
           v="${v#v}"
           v="${v#V}"
+          v="v$v"
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
   winget:
@@ -54,7 +59,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ needs.resolve.outputs.version }}"
-          $installerUrl = "https://github.com/Yaksharo/appraisal-filler/releases/download/v$version/AdviseeDocFiller-Setup-$version.exe"
+          $installerUrl = "https://github.com/Yaksharo/appraisal-filler/releases/download/$version/AdviseeDocFiller-Setup-$version.exe"
           $wingetArgs = @(
             "update", "Yaksharo.AdviseeDocFiller",
             "--version", $version,
