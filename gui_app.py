@@ -7,6 +7,7 @@ Developed by Yaksharo a.k.a Ezer
 """
 import os
 import queue
+import subprocess
 import sys
 import threading
 import traceback
@@ -44,19 +45,21 @@ except ImportError:
     darkdetect = None
 
 THEMES = {
+    # Neutral white / grey / black surfaces with a single blue accent,
+    # matching the default look of Windows 10/11, GNOME and KDE.
     "light": {
-        "bg": "#f6f8f6", "card": "#ffffff", "fg": "#1f2937",
-        "muted": "#6b7280", "line": "#d6dbd6",
-        "accent": "#14532d", "accent_fg": "#ffffff",
-        "accent_hover": "#1c6b3a", "field": "#ffffff",
-        "header": "#14532d", "header_fg": "#ffffff",
+        "bg": "#f3f3f3", "card": "#ffffff", "fg": "#1a1a1a",
+        "muted": "#5f6368", "line": "#e1e1e1",
+        "accent": "#0078d4", "accent_fg": "#ffffff",
+        "accent_hover": "#106ebe", "field": "#ffffff",
+        "header": "#ffffff", "header_fg": "#1a1a1a",
     },
     "dark": {
-        "bg": "#161b18", "card": "#1f2621", "fg": "#e5e9e6",
-        "muted": "#9aa39c", "line": "#3a423c",
-        "accent": "#2f9e5b", "accent_fg": "#0b0f0c",
-        "accent_hover": "#3cb96e", "field": "#262e28",
-        "header": "#0f1512", "header_fg": "#e5e9e6",
+        "bg": "#202020", "card": "#2b2b2b", "fg": "#f3f3f3",
+        "muted": "#9a9a9a", "line": "#3f3f3f",
+        "accent": "#0078d4", "accent_fg": "#ffffff",
+        "accent_hover": "#2b88d8", "field": "#2b2b2b",
+        "header": "#202020", "header_fg": "#f3f3f3",
     },
 }
 
@@ -81,6 +84,35 @@ def clean_dir_path(raw):
     return os.path.normpath(p) if p else ""
 
 
+def documents_dir():
+    """Best-effort path to the user's actual Documents folder, which is
+    not always ~/Documents (Windows profile redirection, localized XDG
+    folder names on Linux, etc.)."""
+    home = os.path.expanduser("~")
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            CSIDL_PERSONAL = 5  # "My Documents"
+            SHGFP_TYPE_CURRENT = 0
+            buf = ctypes.create_unicode_buffer(260)
+            ctypes.windll.shell32.SHGetFolderPathW(
+                None, CSIDL_PERSONAL, None, SHGFP_TYPE_CURRENT, buf)
+            if buf.value:
+                return buf.value
+        except Exception:
+            pass
+    else:
+        try:
+            out = subprocess.run(["xdg-user-dir", "DOCUMENTS"],
+                                 capture_output=True, text=True, timeout=2)
+            path = out.stdout.strip()
+            if path and path != home:
+                return path
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return os.path.join(home, "Documents")
+
+
 class Wizard(tk.Tk):
     STEPS = ["PDF Files", "Students", "Documents", "Faculty", "Generate"]
 
@@ -100,10 +132,10 @@ class Wizard(tk.Tk):
         self.doc_report = tk.BooleanVar(value=True)
         self.output_mode = tk.StringVar(value="individual")
         self.trim_rows = tk.BooleanVar(value=True)
-        self.adviser = tk.StringVar(value="JUAN M. DELA CRUZ")
+        self.adviser = tk.StringVar()
         self.faculty_entries = {}
         self.out_dir = tk.StringVar(value=os.path.join(
-            os.path.expanduser("~"), "AdviseeDocuments"))
+            documents_dir(), "AdviseeDocuments"))
 
         self.step = 0
         self.busy = False
@@ -119,6 +151,7 @@ class Wizard(tk.Tk):
         self.font_size = 12                 # bigger default for legibility
         self.theme_name = system_theme()    # follows the OS on startup
         self._themed_plain = []             # non-ttk widgets to re-color
+        self._themed_permanent = []         # same, but outside self.body
 
         self.style = ttk.Style(self)
         self.style.theme_use("clam")
@@ -308,23 +341,35 @@ class Wizard(tk.Tk):
                     font=("", self.font_size, "bold"))
         s.configure("TCheckbutton", background=t["card"],
                     foreground=t["fg"])
-        s.map("TCheckbutton", background=[("active", t["card"])])
+        s.map("TCheckbutton", background=[("active", t["card"])],
+              indicatorcolor=[("selected", t["accent"]),
+                              ("!selected", t["field"])])
         s.configure("TRadiobutton", background=t["card"],
                     foreground=t["fg"])
-        s.map("TRadiobutton", background=[("active", t["card"])])
+        s.map("TRadiobutton", background=[("active", t["card"])],
+              indicatorcolor=[("selected", t["accent"]),
+                              ("!selected", t["field"])])
         s.configure("TButton", background=t["card"], foreground=t["fg"],
-                    bordercolor=t["line"], focusthickness=1, padding=6)
-        s.map("TButton", background=[("active", t["line"])])
+                    bordercolor=t["line"], borderwidth=1, relief="flat",
+                    focusthickness=0, padding=(14, 8))
+        s.map("TButton",
+              background=[("active", t["line"]), ("pressed", t["line"])],
+              bordercolor=[("focus", t["accent"])])
         s.configure("Accent.TButton", background=t["accent"],
-                    foreground=t["accent_fg"], padding=8,
+                    foreground=t["accent_fg"], borderwidth=0,
+                    relief="flat", padding=(16, 9),
                     font=("", self.font_size, "bold"))
         s.map("Accent.TButton",
               background=[("active", t["accent_hover"]),
+                          ("pressed", t["accent_hover"]),
                           ("disabled", t["line"])])
         s.configure("TEntry", fieldbackground=t["field"],
-                    foreground=t["fg"], insertcolor=t["fg"])
+                    foreground=t["fg"], insertcolor=t["fg"],
+                    bordercolor=t["line"], borderwidth=1, padding=6)
+        s.map("TEntry", bordercolor=[("focus", t["accent"])])
         s.configure("TProgressbar", background=t["accent"],
-                    troughcolor=t["card"], bordercolor=t["line"])
+                    troughcolor=t["card"], bordercolor=t["card"],
+                    borderwidth=0, thickness=6)
         tbfont = (("Segoe MDL2 Assets", max(8, self.font_size - 3))
                   if getattr(self, "_mdl2", False)
                   else ("", max(8, self.font_size - 2)))
@@ -349,7 +394,7 @@ class Wizard(tk.Tk):
                                highlightcolor=t["line"])
             except tk.TclError:
                 pass
-        for w, kind in list(self._themed_plain):
+        for w, kind in list(self._themed_plain) + list(self._themed_permanent):
             try:
                 if kind == "listbox":
                     w.configure(bg=t["field"], fg=t["fg"],
@@ -358,6 +403,10 @@ class Wizard(tk.Tk):
                                 selectforeground=t["accent_fg"])
                 elif kind == "canvas":
                     w.configure(bg=t["card"], highlightthickness=0)
+                elif kind == "phlabel":
+                    w.configure(bg=t["field"], fg=t["muted"])
+                elif kind == "sep":
+                    w.configure(bg=t["line"])
             except tk.TclError:
                 pass
         self._update_theme_button()
@@ -410,6 +459,10 @@ class Wizard(tk.Tk):
         self.btn_theme.pack(side="left", padx=8)
         ttk.Button(right, text="About",
                    command=self.show_about).pack(side="left")
+
+        sep = tk.Frame(self, height=1, bd=0, highlightthickness=0)
+        sep.pack(fill="x")
+        self._themed_permanent.append((sep, "sep"))
 
         self.header_lbl = ttk.Label(self, text="", style="Step.TLabel")
         self.header_lbl.pack(anchor="w", padx=16, pady=(12, 4))
@@ -683,8 +736,10 @@ class Wizard(tk.Tk):
         f = self.body
         ttk.Label(f, text="Adviser name (printed on the Report of "
                           "Rating):").pack(anchor="w", pady=4)
-        ttk.Entry(f, textvariable=self.adviser,
-                  width=44).pack(anchor="w")
+        adviser_entry = ttk.Entry(f, textvariable=self.adviser, width=44)
+        adviser_entry.pack(anchor="w")
+        self._add_placeholder(f, adviser_entry, self.adviser,
+                              "e.g. Juan M. Dela Cruz")
         ttk.Label(f, text="\nFaculty per subject. These codes were found "
                           "in your PDFs. Leave a name blank\nand the "
                           "column stays blank in the "
@@ -704,7 +759,9 @@ class Wizard(tk.Tk):
                       style="Card.TLabel").pack(side="left")
             ttk.Label(row, text=title[:46], width=42,
                       style="Card.TLabel").pack(side="left")
-            ttk.Entry(row, textvariable=var, width=30).pack(side="left")
+            fac_entry = ttk.Entry(row, textvariable=var, width=30)
+            fac_entry.pack(side="left")
+            self._add_placeholder(row, fac_entry, var, "e.g. Juan Dela Cruz")
 
     # ---------------------------------------------------- step 5: generate
     def _step_generate(self):
@@ -916,6 +973,45 @@ class Wizard(tk.Tk):
         except queue.Empty:
             pass
         self.after(50, self._poll_queue)
+
+    def _add_placeholder(self, parent, entry, var, text):
+        """Show greyed hint text over an Entry while its var is empty and
+        unfocused. The hint is never written into var itself, so a field
+        left untouched reads back as "" (blank in the generated document).
+        """
+        t = THEMES[self.theme_name]
+        ph = tk.Label(parent, text=text, fg=t["muted"], bg=t["field"],
+                     bd=0, anchor="w")
+        state = {"focused": False}
+
+        def sync(*_a):
+            if not var.get() and not state["focused"]:
+                ph.place(in_=entry, x=8, rely=0.5, anchor="w")
+            else:
+                ph.place_forget()
+
+        def on_in(_e=None):
+            state["focused"] = True
+            sync()
+
+        def on_out(_e=None):
+            state["focused"] = False
+            sync()
+
+        trace_id = var.trace_add("write", sync)
+
+        def on_destroy(_e=None):
+            try:
+                var.trace_remove("write", trace_id)
+            except tk.TclError:
+                pass
+
+        entry.bind("<FocusIn>", on_in, add="+")
+        entry.bind("<FocusOut>", on_out, add="+")
+        entry.bind("<Destroy>", on_destroy, add="+")
+        sync()
+        self._themed_plain.append((ph, "phlabel"))
+        return ph
 
     def _scroll_area(self, parent):
         holder = ttk.Frame(parent, style="Card.TFrame")

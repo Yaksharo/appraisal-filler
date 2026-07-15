@@ -1,8 +1,9 @@
 name: Build executables
 
 # Two ways to get builds:
-#  1. Actions tab -> "Build executables" -> Run workflow -> download artifacts
-#  2. Push a tag like v1.0 -> a GitHub Release is created with everything
+#  1. Actions tab -> "Build executables" -> Run workflow -> publishes/updates
+#     the rolling "latest" pre-release with everything attached
+#  2. Push a tag like v1.0 -> a proper versioned GitHub Release is created
 on:
   workflow_dispatch:
   push:
@@ -151,7 +152,7 @@ jobs:
 
   release:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/')
+    if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -159,6 +160,28 @@ jobs:
           merge-multiple: true
           path: dist
 
+      # Tag pushes (v1.0, v2.3...) publish a normal versioned release.
+      # Manual "Run workflow" runs (no tag) publish/update a rolling
+      # "latest" pre-release, so every manual run still ends up somewhere
+      # visible on the repo's Releases page instead of only as a
+      # sign-in-required, 90-day Actions artifact.
+      - name: Determine release tag
+        id: rel
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+            echo "name=Latest build (${GITHUB_SHA::7})" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: ${{ steps.rel.outputs.name }}
+          prerelease: ${{ steps.rel.outputs.prerelease }}
           files: dist/*
