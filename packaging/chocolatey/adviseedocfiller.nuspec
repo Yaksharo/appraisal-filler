@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>adviseedocfiller</id>
+    <!-- Bump this to match the GitHub release version before packing. -->
+    <version>1.0.0</version>
+    <owners>Yaksharo Solutions</owners>
+    <title>Advisee Document Filler</title>
+    <authors>Yaksharo Solutions</authors>
+    <projectUrl>https://github.com/Yaksharo/appraisal-filler</projectUrl>
+    <packageSourceUrl>https://github.com/Yaksharo/appraisal-filler</packageSourceUrl>
+    <projectSourceUrl>https://github.com/Yaksharo/appraisal-filler</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/Yaksharo/appraisal-filler/issues</bugTrackerUrl>
+    <iconUrl>https://raw.githubusercontent.com/Yaksharo/appraisal-filler/main/assets/logo.png</iconUrl>
+    <copyright>2026 Yaksharo Solutions</copyright>
+    <licenseUrl>https://github.com/Yaksharo/appraisal-filler/blob/main/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <tags>appraisal grades docx unp ccit adviser office</tags>
+    <summary>Fills UNP CCIT Appraisal Sheets and Reports of Rating from Periodic Grades Listing PDFs</summary>
+    <description>Reads Periodic Grades Listing PDFs from the student portal and fills the Appraisal Sheet (VPAA-CCIT-QF-05) and Report of Rating (VPAA-CCIT-QF-09) for every advisee.</description>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>
