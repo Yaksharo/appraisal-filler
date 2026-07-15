@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish, matching an existing vX.Y release tag (e.g. 1.01)"
+        description: "Version to publish, matching an existing release tag (accepts 1.01, v1.01, or V1.01)"
         required: true
       winget_submit:
         description: "Actually open the winget-pkgs PR (needs the WINGET_GH_TOKEN secret). Unchecked = preview manifest only."
@@ -25,9 +25,32 @@ permissions:
   contents: read
 
 jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.norm.outputs.version }}
+    steps:
+      - id: norm
+        shell: bash
+        run: |
+          v="${{ inputs.version }}"
+          v="${v#v}"
+          v="${v#V}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
   winget:
+    needs: resolve
     runs-on: windows-latest
     steps:
+      - name: Check required secret
+        if: env.HAS_WINGET_TOKEN == 'false'
+        shell: pwsh
+        run: |
+          Write-Error "WINGET_GH_TOKEN secret is not set. wingetcreate needs it even to preview (it reads the existing manifest from microsoft/winget-pkgs via the GitHub API), not just to submit."
+          exit 1
+        env:
+          HAS_WINGET_TOKEN: ${{ secrets.WINGET_GH_TOKEN != '' }}
+
       - name: Download wingetcreate
         shell: pwsh
         run: Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
@@ -35,31 +58,35 @@ jobs:
       - name: Create/update manifest
         shell: pwsh
         run: |
-          $installerUrl = "https://github.com/Yaksharo/appraisal-filler/releases/download/v${{ inputs.version }}/AdviseeDocFiller-Setup-${{ inputs.version }}.exe"
+          $version = "${{ needs.resolve.outputs.version }}"
+          $installerUrl = "https://github.com/Yaksharo/appraisal-filler/releases/download/v$version/AdviseeDocFiller-Setup-$version.exe"
           $wingetArgs = @(
             "update", "Yaksharo.AdviseeDocFiller",
-            "--version", "${{ inputs.version }}",
+            "--version", $version,
             "--urls", $installerUrl,
-            "--out", "manifests"
+            "--out", "manifests",
+            "--token", "${{ secrets.WINGET_GH_TOKEN }}"
           )
           if ("${{ inputs.winget_submit }}" -eq "true") {
-            $wingetArgs += @("--submit", "--token", "${{ secrets.WINGET_GH_TOKEN }}")
+            $wingetArgs += "--submit"
           }
           ./wingetcreate.exe @wingetArgs
 
-      # If this is the very first-ever submission for this app, `update`
-      # will fail because there's no existing manifest to update. Run
-      # `wingetcreate new $installerUrl` once locally instead (see README),
-      # then this workflow's `update` path works for every release after.
+      # First-ever submission for this app: `update` has nothing to update
+      # yet and will fail even with a valid token. Run
+      # `wingetcreate new <installer-url>` once yourself, interactively
+      # (see README) - after that manifest is merged, this job's `update`
+      # path works for every release after.
 
       - name: Upload manifest for review
         if: inputs.winget_submit == 'false'
         uses: actions/upload-artifact@v4
         with:
-          name: winget-manifest-${{ inputs.version }}
+          name: winget-manifest-${{ needs.resolve.outputs.version }}
           path: manifests/**
 
   chocolatey:
+    needs: resolve
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,16 +94,18 @@ jobs:
       - name: Look up checksum from the release's SHA256SUMS
         shell: pwsh
         run: |
-          $sums = Invoke-WebRequest "https://github.com/Yaksharo/appraisal-filler/releases/download/v${{ inputs.version }}/SHA256SUMS" -UseBasicParsing
-          $line = ($sums.Content -split "`n") | Where-Object { $_ -match "AdviseeDocFiller-Setup-${{ inputs.version }}\.exe" }
-          if (-not $line) { throw "Couldn't find AdviseeDocFiller-Setup-${{ inputs.version }}.exe in that release's SHA256SUMS" }
+          $version = "${{ needs.resolve.outputs.version }}"
+          $sums = Invoke-WebRequest "https://github.com/Yaksharo/appraisal-filler/releases/download/v$version/SHA256SUMS" -UseBasicParsing
+          $line = ($sums.Content -split "`n") | Where-Object { $_ -match "AdviseeDocFiller-Setup-$version\.exe" }
+          if (-not $line) { throw "Couldn't find AdviseeDocFiller-Setup-$version.exe in that release's SHA256SUMS" }
           $checksum = ($line -split '\s+')[0]
           echo "CHECKSUM=$checksum" >> $env:GITHUB_ENV
 
       - name: Fill in version, URL and checksum
         shell: pwsh
         run: |
-          $installerUrl = "https://github.com/Yaksharo/appraisal-filler/releases/download/v${{ inputs.version }}/AdviseeDocFiller-Setup-${{ inputs.version }}.exe"
+          $version = "${{ needs.resolve.outputs.version }}"
+          $installerUrl = "https://github.com/Yaksharo/appraisal-filler/releases/download/v$version/AdviseeDocFiller-Setup-$version.exe"
           $installScript = "packaging/chocolatey/tools/chocolateyinstall.ps1"
           (Get-Content $installScript) `
             -replace "\`$url\s*=.*", "`$url      = '$installerUrl'" `
@@ -84,7 +113,7 @@ jobs:
             Set-Content $installScript
 
           (Get-Content "packaging/chocolatey/adviseedocfiller.nuspec") `
-            -replace "<version>.*</version>", "<version>${{ inputs.version }}</version>" |
+            -replace "<version>.*</version>", "<version>$version</version>" |
             Set-Content "packaging/chocolatey/adviseedocfiller.nuspec"
 
       - name: choco pack
@@ -96,7 +125,7 @@ jobs:
         if: inputs.choco_push == 'false'
         uses: actions/upload-artifact@v4
         with:
-          name: chocolatey-package-${{ inputs.version }}
+          name: chocolatey-package-${{ needs.resolve.outputs.version }}
           path: packaging/chocolatey/*.nupkg
 
       - name: Push to Chocolatey
