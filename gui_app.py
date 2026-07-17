@@ -758,13 +758,14 @@ class Wizard(tk.Tk):
         box2 = ttk.LabelFrame(f, text="Terms to include (Report of Rating)",
                               padding=10)
         box2.pack(fill="x", pady=6)
+        _, terms_inner = self._scroll_area(box2, height=130)
         for key in self.term_keys:
             var = self.term_vars.setdefault(key, tk.BooleanVar(value=True))
-            ttk.Checkbutton(box2, text=f"{key[0]} {key[1]}",
+            ttk.Checkbutton(terms_inner, text=f"{key[0]} {key[1]}",
                             variable=var).pack(anchor="w", pady=2)
         ttk.Label(box2, text="The Appraisal Sheet always includes every "
                              "term found in the PDFs.",
-                  style="Card.TLabel").pack(anchor="w", pady=2)
+                  style="Card.TLabel").pack(anchor="w", pady=(6, 2))
 
         box3 = ttk.LabelFrame(f, text="Output format", padding=10)
         box3.pack(fill="x", pady=6)
@@ -1124,19 +1125,36 @@ class Wizard(tk.Tk):
 
         entry.bind("<Destroy>", on_destroy, add="+")
 
-    def _scroll_area(self, parent):
+    def _scroll_area(self, parent, height=None):
+        """A scrollable frame. With `height` set, the area stays that tall
+        (for a compact list embedded among other sections); otherwise it
+        expands to fill whatever space is left. Either way, the scrollbar
+        only appears once the content actually overflows the visible area.
+        """
+        bounded = height is not None
         holder = ttk.Frame(parent, style="Card.TFrame")
-        holder.pack(fill="both", expand=True, pady=6)
+        holder.pack(fill=("x" if bounded else "both"),
+                    expand=not bounded, pady=6)
         canvas = tk.Canvas(holder, highlightthickness=0)
+        if bounded:
+            canvas.configure(height=height)
         vsb = ttk.Scrollbar(holder, orient="vertical",
                             command=canvas.yview)
         inner = ttk.Frame(canvas, style="Card.TFrame")
-        inner.bind("<Configure>", lambda e: canvas.configure(
-            scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def sync_scrollbar(_e=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            overflowing = inner.winfo_reqheight() > canvas.winfo_height()
+            if overflowing and not vsb.winfo_ismapped():
+                vsb.pack(side="right", fill="y")
+            elif not overflowing and vsb.winfo_ismapped():
+                vsb.pack_forget()
+
+        inner.bind("<Configure>", sync_scrollbar)
+        canvas.bind("<Configure>", sync_scrollbar)
         canvas.configure(yscrollcommand=vsb.set)
         canvas.pack(side="left", fill="both", expand=True)
-        vsb.pack(side="right", fill="y")
         self._themed_plain.append((canvas, "canvas"))
         canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(
             int(-e.delta / 120), "units"))
