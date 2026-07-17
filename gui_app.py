@@ -751,7 +751,13 @@ class Wizard(tk.Tk):
     # --------------------------------------------------- step 3: documents
     def _step_documents(self):
         f = self.body
-        box1 = ttk.LabelFrame(f, text="Documents to generate", padding=10)
+        # This step's three LabelFrames can add up to more height than a
+        # normal (un-maximized) window has room for, especially at larger
+        # font sizes - wrap them in a scroll area so overflow gets a
+        # scrollbar instead of silently clipping "Output format" (the last
+        # of the three) off the bottom.
+        _, inner = self._scroll_area(f)
+        box1 = ttk.LabelFrame(inner, text="Documents to generate", padding=10)
         box1.pack(fill="x", pady=6)
         ttk.Checkbutton(box1, text="Appraisal Sheet (one per student, all "
                                    "terms)",
@@ -760,19 +766,18 @@ class Wizard(tk.Tk):
                                    "term)",
                         variable=self.doc_report).pack(anchor="w", pady=2)
 
-        box2 = ttk.LabelFrame(f, text="Terms to include (Report of Rating)",
-                              padding=10)
+        box2 = ttk.LabelFrame(inner, text="Terms to include (Report of "
+                                          "Rating)", padding=10)
         box2.pack(fill="x", pady=6)
-        _, terms_inner = self._scroll_area(box2, height=130)
         for key in self.term_keys:
             var = self.term_vars.setdefault(key, tk.BooleanVar(value=True))
-            ttk.Checkbutton(terms_inner, text=f"{key[0]} {key[1]}",
+            ttk.Checkbutton(box2, text=f"{key[0]} {key[1]}",
                             variable=var).pack(anchor="w", pady=2)
         ttk.Label(box2, text="The Appraisal Sheet always includes every "
                              "term found in the PDFs.",
                   style="Card.TLabel").pack(anchor="w", pady=(6, 2))
 
-        box3 = ttk.LabelFrame(f, text="Output format", padding=10)
+        box3 = ttk.LabelFrame(inner, text="Output format", padding=10)
         box3.pack(fill="x", pady=6)
         ttk.Radiobutton(box3, text="Individual files (one docx per student)",
                         variable=self.output_mode,
@@ -854,7 +859,10 @@ class Wizard(tk.Tk):
 
     # ---------------------------------------------------- step 5: generate
     def _step_generate(self):
-        f = self.body
+        # Scroll-wrapped for the same reason as step 3: at a small window
+        # size or a large font size, this step's stack of sections could
+        # otherwise squeeze the Generate/Open folder buttons off-screen.
+        _, f = self._scroll_area(self.body)
         n_students = sum(1 for v in self.student_vars.values() if v.get())
         picked_terms = [k for k, v in self.term_vars.items() if v.get()]
         docs = []
@@ -1146,10 +1154,14 @@ class Wizard(tk.Tk):
         vsb = ttk.Scrollbar(holder, orient="vertical",
                             command=canvas.yview)
         inner = ttk.Frame(canvas, style="Card.TFrame")
-        canvas.create_window((0, 0), window=inner, anchor="nw")
+        win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
 
         def sync_scrollbar(_e=None):
             canvas.configure(scrollregion=canvas.bbox("all"))
+            # Stretch inner to the canvas's actual width so fill="x"
+            # children inside it (e.g. LabelFrames) still span the full
+            # width instead of shrink-wrapping to their own content.
+            canvas.itemconfigure(win_id, width=canvas.winfo_width())
             overflowing = inner.winfo_reqheight() > canvas.winfo_height()
             if overflowing and not vsb.winfo_ismapped():
                 vsb.pack(side="right", fill="y")
@@ -1161,12 +1173,35 @@ class Wizard(tk.Tk):
         canvas.configure(yscrollcommand=vsb.set)
         canvas.pack(side="left", fill="both", expand=True)
         self._themed_plain.append((canvas, "canvas"))
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(
-            int(-e.delta / 120), "units"))
-        canvas.bind_all("<Button-4>",
-                        lambda e: canvas.yview_scroll(-1, "units"))
-        canvas.bind_all("<Button-5>",
-                        lambda e: canvas.yview_scroll(1, "units"))
+
+        # bind_all is global, so two scroll areas on screen at once (a
+        # step wrapped in one, with another nested inside a box on that
+        # step) would otherwise fight over which canvas the wheel drives,
+        # and a stale binding could still point at a canvas destroyed by
+        # the next _clear_body(). Scope the global binding to only while
+        # the pointer is actually over this canvas.
+        def wheel_win(e):
+            canvas.yview_scroll(int(-e.delta / 120), "units")
+
+        def wheel_up(_e):
+            canvas.yview_scroll(-1, "units")
+
+        def wheel_down(_e):
+            canvas.yview_scroll(1, "units")
+
+        def bind_wheel(_e=None):
+            canvas.bind_all("<MouseWheel>", wheel_win)
+            canvas.bind_all("<Button-4>", wheel_up)
+            canvas.bind_all("<Button-5>", wheel_down)
+
+        def unbind_wheel(_e=None):
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+
+        canvas.bind("<Enter>", bind_wheel)
+        canvas.bind("<Leave>", unbind_wheel)
+        canvas.bind("<Destroy>", unbind_wheel, add="+")
         return canvas, inner
 
 
