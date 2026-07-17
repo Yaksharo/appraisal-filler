@@ -4,7 +4,9 @@ A small tool for UNP CCIT advisers, available as a standalone desktop app
 or a local web app. It reads Periodic Grades Listing PDFs from the student
 portal and fills two official forms for every advisee.
 
-- Appraisal Sheet (VPAA-CCIT-QF-05), one per student, all terms in one file
+- Appraisal Sheet (VPAA-CCIT-QF-05), one per student, all terms in one file,
+  using the template that matches the student's course (BSCS, BSIT, BLIS
+  or DCT), auto-detected from the PDF
 - Report of Rating (VPAA-CCIT-QF-09), one per student per term
 
 ## Two ways to run it
@@ -153,29 +155,54 @@ into pages (PDF Files &rarr; Students &rarr; Documents &rarr; Faculty &rarr;
 Generate), and the web app does the same work on a single page with a
 "Preview students" button.
 
-1. Add one or more grade listing PDFs. You can add the 1st and 2nd
-   term listings together. Students are matched across PDFs by ID number.
+1. Enter the Adviser name and Dean name (both required) and add one or
+   more grade listing PDFs. You can add the 1st and 2nd term listings
+   together. Students are matched across PDFs by ID number, and the
+   course found in each PDF (BSCS, BSIT, BLIS or DCT) picks the matching
+   Appraisal Sheet template automatically.
 2. Preview/check the parsed students, and untick anyone you want to skip.
 3. Pick which documents to generate.
-4. Set the adviser name and, optionally, map instructors per subject code
-   (desktop: one entry field per code; web: one per line, like
+4. Adviser and Dean are already filled in from step 1. Optionally map
+   instructors per subject code (desktop: a dropdown/entry per code,
+   pre-filled from names you've used before; web: one per line, like
    `CT103 = Juan Dela Cruz`). The PDF has no instructor names, so the
    Faculty and Instructor columns stay blank unless you map them — leaving
-   the adviser or a faculty field empty also leaves it blank in the
-   generated documents, it does not fall back to a placeholder name.
+   a faculty field empty also leaves it blank in the generated documents,
+   it does not fall back to a placeholder name.
 5. Pick the output format. Individual gives one docx per student
    (zipped on the web app). One batch file merges every student into a
    single docx, one student per page, ready for bulk printing.
 6. For Reports of Rating you can also untick terms you don't need.
 7. Click Generate.
 
+## Remembering names (local database)
+
+The app keeps a small local SQLite database (`store.db`, in the OS's
+standard per-user app-data folder — never bundled, never synced) of every
+Adviser, Dean and per-subject-code faculty name you've typed. Next time,
+those show up as suggestions: a dropdown you can pick from on the desktop
+app, or autocomplete on the web app, and the faculty step pre-fills any
+subject code it recognizes from a previous run. You can still type a new
+name at any time — nothing is required to already be in the list. Nothing
+in this database ever leaves the machine.
+
 ## How the data maps
 
 - The periodic rating column in the PDF goes to the Midterm cell of the
   Report of Rating. The Grade column goes to the Final cell.
-- The Appraisal Sheet has four term tables. They are filled in order,
-  First Year 1st Term, First Year 2nd Term, Second Year 1st Term,
-  Second Year 2nd Term, based on the Period line in each PDF.
+- The course code found in the PDF (`BSCS`, `BSIT`, `BLIS` or `DCT`) picks
+  the Appraisal Sheet template. An unrecognized code falls back to the
+  BSCS template.
+- Each Appraisal Sheet template has one term table per year/term the
+  course actually has (DCT: First and Second Year only; the others also
+  have Third Year, Mid Year and Fourth Year). Tables are filled in
+  chronological order — earliest school year first, 1st Term before 2nd —
+  based on the Period line in each PDF, not on any year label in the PDF
+  itself.
+- Whole year blocks (heading and table) that come after the student's
+  last parsed term are removed from the generated file, e.g. a student
+  who only reached Second Year won't have Third Year, Mid Year or Fourth
+  Year sections at all.
 - Term/SY is written as `1st/25-26` style. Change `term_sy_label` in
   `filler.py` if your format differs.
 - Total units per term is computed and placed in the totals row.
@@ -183,13 +210,20 @@ Generate), and the web app does the same work on a single page with a
 ## Notes
 
 - The templates live in `templates_docx/`. Replace them with updated forms
-  as long as the table layout stays the same.
-- Unused blank rows in the Report of Rating grade table are removed
-  automatically. Untick the option in the UI to keep them.
+  as long as the table layout stays the same; add a new course by dropping
+  in a docx and adding it to `APPRAISAL_TEMPLATES` in `filler.py`.
+- Unused blank rows are removed automatically in both documents: on the
+  Report of Rating you can untick the option in the UI to keep them, the
+  Appraisal Sheet always trims them (that's what the extra blank rows in
+  the BSCS/BSIT/BLIS templates are for).
 - Trailing empty paragraphs in the templates are stripped, so the Report
   of Rating no longer produces a blank second page.
 - The parser targets the exact layout of the "Periodic Grades Listing"
   report. If the registrar changes the report layout, adjust `parser.py`.
+- The About section (desktop) and footer (web) show the version of the
+  build you're running, resolved from `VERSION` (bundled by the build
+  workflow from the git tag) and falling back to `git describe` when
+  running from source. See `version.py`.
 
 ## App icon
 
