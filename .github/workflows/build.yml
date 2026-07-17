@@ -220,8 +220,7 @@ jobs:
         run: |
           sha256sum * > SHA256SUMS
           cosign sign-blob --yes SHA256SUMS \
-            --output-signature SHA256SUMS.sig \
-            --output-certificate SHA256SUMS.pem
+            --bundle SHA256SUMS.bundle
 
       # Tag pushes (v1.0, v2.3...) publish a normal versioned release.
       # Manual "Run workflow" runs (no tag) publish/update a rolling

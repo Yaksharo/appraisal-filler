@@ -272,21 +272,20 @@ Windows and Linux machines, so you never build on your own computer.
 
 ### Verifying a release (Sigstore)
 
-Every release includes `SHA256SUMS`, `SHA256SUMS.sig`, and
-`SHA256SUMS.pem`. These prove the published files were built by this
-repo's `build.yml` on GitHub's runners and haven't been altered since,
-using [Sigstore](https://www.sigstore.dev/) keyless signing (no private
-key to leak, verifiable against the public Rekor transparency log).
-This is a supply-chain integrity check, not a Windows/Authenticode
-signature - it won't change the SmartScreen or "Unknown Publisher"
-prompt, which come from a separate, CA-based trust system.
+Every release includes `SHA256SUMS` and `SHA256SUMS.bundle`. The bundle
+proves the published files were built by this repo's `build.yml` on
+GitHub's runners and haven't been altered since, using
+[Sigstore](https://www.sigstore.dev/) keyless signing (no private key to
+leak, verifiable against the public Rekor transparency log). This is a
+supply-chain integrity check, not a Windows/Authenticode signature - it
+won't change the SmartScreen or "Unknown Publisher" prompt, which come
+from a separate, CA-based trust system.
 
 To verify with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/):
 
 ```
 cosign verify-blob \
-  --certificate SHA256SUMS.pem \
-  --signature SHA256SUMS.sig \
+  --bundle SHA256SUMS.bundle \
   --certificate-identity-regexp "^https://github.com/Yaksharo/appraisal-filler/" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   SHA256SUMS
