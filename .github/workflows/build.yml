@@ -26,9 +26,9 @@ jobs:
             iconflag: ""
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -100,7 +100,7 @@ jobs:
 
       - name: Upload Windows portable artifact
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AdviseeDocFiller-windows-portable
           path: AdviseeDocFiller-windows-portable.zip
@@ -124,7 +124,7 @@ jobs:
 
       - name: Upload Windows installer artifact
         if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AdviseeDocFiller-windows-setup
           path: Output/AdviseeDocFiller-Setup-*.exe
@@ -135,7 +135,7 @@ jobs:
 
       - name: Upload Linux portable artifact
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: AdviseeDocFiller-linux
           path: AdviseeDocFiller-linux.tar.gz
@@ -187,7 +187,7 @@ jobs:
 
       - name: Upload Linux packages
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: linux-packages
           path: packages/*
@@ -200,7 +200,7 @@ jobs:
       contents: write
       id-token: write   # required for keyless Sigstore signing
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           merge-multiple: true
           path: dist
@@ -213,7 +213,7 @@ jobs:
       # (see README for the verify command) - this does NOT touch Windows
       # Authenticode/SmartScreen/UAC, which only trust CA-issued certs.
       - name: Install cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Checksum and sign release artifacts
         working-directory: dist
@@ -242,7 +242,7 @@ jobs:
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.rel.outputs.tag }}
           name: ${{ steps.rel.outputs.name }}
@@ -258,7 +258,7 @@ jobs:
       # "latest" pre-release on manual runs). No-ops until VT_API_KEY is set.
       - name: VirusTotal scan
         if: env.HAS_VT_KEY == 'true'
-        uses: crazy-max/ghaction-virustotal@v4
+        uses: crazy-max/ghaction-virustotal@v5
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
           update_release_body: true

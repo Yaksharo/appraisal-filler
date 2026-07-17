@@ -80,7 +80,7 @@ jobs:
 
       - name: Upload manifest for review
         if: inputs.winget_submit == 'false'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: winget-manifest-${{ needs.resolve.outputs.version }}
           path: manifests/**
