@@ -35,6 +35,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
 
+      # Single source of truth for the version shown in the app's About
+      # section (gui_app.py / index.html via version.py), the Windows
+      # installer, and the Linux packages below: the git tag that
+      # triggered this build, so a release always shows its own number.
+      - name: Compute version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          case "$VERSION" in
+            ""|main|master|*/*) VERSION="v1.0" ;;
+          esac
+          echo "$VERSION" > VERSION
+          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
+
       # onedir (a folder, not a single file) starts in about a second;
       # onefile has to unpack ~120 MB to a temp dir on EVERY launch.
       # --noupx: UPX-compressed executables are a common heuristic trigger
@@ -45,6 +59,7 @@ jobs:
           pyinstaller --onedir --windowed --name AdviseeDocFiller --noupx
           --add-data "templates_docx${{ matrix.sep }}templates_docx"
           --add-data "assets${{ matrix.sep }}assets"
+          --add-data "VERSION${{ matrix.sep }}."
           --hidden-import docxcompose --collect-data docxcompose
           ${{ matrix.iconflag }}
           gui_app.py
@@ -90,16 +105,6 @@ jobs:
           name: AdviseeDocFiller-windows-portable
           path: AdviseeDocFiller-windows-portable.zip
 
-      - name: Compute version
-        if: matrix.os == 'windows-latest'
-        shell: bash
-        run: |
-          VERSION="${GITHUB_REF_NAME}"
-          case "$VERSION" in
-            ""|main|master|*/*) VERSION="v1.0" ;;
-          esac
-          echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
-
       - name: Build Windows installer (Inno Setup)
         if: matrix.os == 'windows-latest'
         shell: pwsh
@@ -144,11 +149,6 @@ jobs:
             libarchive-tools zstd
           sudo gem install --no-document fpm
 
-          VERSION="${GITHUB_REF_NAME}"
-          case "$VERSION" in
-            ""|main|master|*/*) VERSION="v1.0" ;;
-          esac
-
           STAGE=pkgroot
           mkdir -p "$STAGE/opt" \
                    "$STAGE/usr/share/applications" \
@@ -175,7 +175,7 @@ jobs:
           for TARGET in deb rpm pacman; do
             fpm -s dir -t "$TARGET" \
               -n adviseedocfiller \
-              -v "$VERSION" \
+              -v "$APP_VERSION" \
               --license "MIT" \
               --maintainer "Yaksharo a.k.a Ezer" \
               --description "Fills UNP CCIT Appraisal Sheets and Reports of Rating from Periodic Grades Listing PDFs" \
