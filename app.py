@@ -6,9 +6,12 @@ from flask import Flask, render_template, request, send_file
 
 import parser as grade_parser
 import filler
+import store
+from version import app_version
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
+app.jinja_env.globals["app_version"] = app_version
 
 DOCX_MIME = ("application/vnd.openxmlformats-officedocument"
              ".wordprocessingml.document")
@@ -33,9 +36,16 @@ def _term_key_str(term, sy):
     return f"{term}|{sy}"
 
 
+def _known_names():
+    return {
+        "known_advisers": store.known_people("adviser"),
+        "known_deans": store.known_people("dean"),
+    }
+
+
 @app.route("/", methods=["GET"])
 def index():
-    return render_template("index.html")
+    return render_template("index.html", **_known_names())
 
 
 @app.route("/preview", methods=["POST"])
@@ -49,10 +59,12 @@ def preview():
                  for t, sy in terms]
     codes = sorted({subj["code"] for s in students
                     for subs in s["terms"].values() for subj in subs})
-    faculty_prefill = "\n".join(f"{c} = " for c in codes)
+    known = store.faculty_for_codes(codes)
+    faculty_prefill = "\n".join(
+        f"{c} = {known.get(c.replace(' ', '').upper(), '')}" for c in codes)
     return render_template("index.html", students=students,
                            term_opts=term_opts, n_files=len(parsed),
-                           faculty_prefill=faculty_prefill)
+                           faculty_prefill=faculty_prefill, **_known_names())
 
 
 @app.route("/generate", methods=["POST"])
@@ -64,11 +76,19 @@ def generate():
     make_appraisal = "appraisal" in request.form.getlist("docs")
     make_report = "report" in request.form.getlist("docs")
     adviser = request.form.get("adviser", "").strip()
+    dean = request.form.get("dean", "").strip()
+    if not adviser or not dean:
+        return "Adviser name and Dean name are required.", 400
     faculty_map = _parse_faculty_map(request.form.get("faculty_map", ""))
     only_ids = set(request.form.getlist("student"))
     only_terms = set(request.form.getlist("terms"))      # e.g. "1st Term|2025-2026"
     output_mode = request.form.get("output_mode", "individual")
     trim_rows = request.form.get("trim_rows", "yes") == "yes"
+
+    store.remember_person("adviser", adviser)
+    store.remember_person("dean", dean)
+    for code, name in faculty_map.items():
+        store.remember_faculty(code, name)
 
     students = [s for sid, s in sorted(merged.items(),
                                        key=lambda kv: kv[1]["name"])
@@ -81,7 +101,8 @@ def generate():
 
     if output_mode == "combined":
         if make_appraisal:
-            docs = [filler.build_appraisal(s, faculty_map) for s in students]
+            docs = [filler.build_appraisal(s, faculty_map, adviser, dean)
+                    for s in students]
             buf = filler.combine_documents(docs)
             if buf:
                 outputs.append(("", "Appraisal_Sheets_ALL.docx", buf.read()))
@@ -91,7 +112,7 @@ def generate():
                 if not term_selected(term, sy):
                     continue
                 docs = [filler.build_report(s, term, sy, s["terms"][(term, sy)],
-                                            faculty_map, adviser, trim_rows)
+                                            faculty_map, adviser, dean, trim_rows)
                         for s in students if (term, sy) in s["terms"]]
                 buf = filler.combine_documents(docs)
                 if buf:
@@ -103,7 +124,7 @@ def generate():
         for s in students:
             base = _safe(s["name"])
             if make_appraisal:
-                buf = filler.fill_appraisal(s, faculty_map)
+                buf = filler.fill_appraisal(s, faculty_map, adviser, dean)
                 outputs.append(("Appraisal_Sheets/",
                                 f"{base}_{s['id']}.docx", buf.read()))
             if make_report:
@@ -111,7 +132,7 @@ def generate():
                     if not term_selected(term, sy):
                         continue
                     buf = filler.fill_report(s, term, sy, subjects,
-                                             faculty_map, adviser, trim_rows)
+                                             faculty_map, adviser, dean, trim_rows)
                     tslug = term.replace(" ", "")
                     outputs.append((f"Reports_of_Rating/{tslug}_{sy}/",
                                     f"{base}_{s['id']}.docx", buf.read()))

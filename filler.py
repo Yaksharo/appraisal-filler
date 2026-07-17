@@ -14,8 +14,21 @@ def resource_path(rel):
     return os.path.join(base, rel)
 
 
-APPRAISAL_TPL = resource_path(os.path.join("templates_docx", "Appraisal_Sheet.docx"))
+APPRAISAL_TEMPLATES = {
+    "BSCS": resource_path(os.path.join("templates_docx", "Appraisal_Sheet_BSCS.docx")),
+    "BSIT": resource_path(os.path.join("templates_docx", "Appraisal_Sheet_BSIT.docx")),
+    "BLIS": resource_path(os.path.join("templates_docx", "Appraisal_Sheet_BLIS.docx")),
+    "DCT": resource_path(os.path.join("templates_docx", "Appraisal_Sheet_DCT.docx")),
+}
+DEFAULT_APPRAISAL_COURSE = "BSCS"
 REPORT_TPL = resource_path(os.path.join("templates_docx", "Report_of_Rating.docx"))
+
+# Appraisal Sheet year-block headings, in document order. Each maps to the
+# term tables that follow it (2 for a full year, 1 for Mid Year), used to
+# drop whole unused blocks (e.g. Third Year/Mid Year/Fourth Year for a
+# student who only reached Second Year).
+YEAR_GROUP_LABELS = ("FIRST YEAR", "SECOND YEAR", "THIRD YEAR",
+                     "MID YEAR", "FOURTH YEAR")
 
 FONT = "Calibri"
 
@@ -68,7 +81,64 @@ def _delete_row(table, row):
     row._tr.getparent().remove(row._tr)
 
 
+def _fill_table_rows(table, subjects, first_data, set_row, trim=True):
+    """Grow a table's data rows to fit `subjects` (cloning the template's
+    last data row as needed), fill each with `set_row(row, subject)`, and
+    optionally delete any rows left blank between the last subject and the
+    trailing TOTAL row."""
+    last_data = len(table.rows) - 2
+    n_slots = last_data - first_data + 1
+    while n_slots < len(subjects):
+        _add_data_row(table, table.rows[last_data])
+        last_data += 1
+        n_slots += 1
+    for i, subj in enumerate(subjects):
+        set_row(table.rows[first_data + i], subj)
+    if trim:
+        for idx in range(last_data, first_data + len(subjects) - 1, -1):
+            _delete_row(table, table.rows[idx])
+
+
 W_NS = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+
+
+def _remove_unused_year_groups(doc, n_used_slots):
+    """Delete whole Appraisal Sheet year-blocks (heading + its term tables)
+    that fall entirely beyond the terms actually being filled. Must run
+    after every table has been filled, since it only looks at how many
+    term-table slots precede each heading."""
+    body = doc.element.body
+    children = list(body.iterchildren())
+    p_tag, tbl_tag = f'{W_NS}p', f'{W_NS}tbl'
+
+    def text_of(el):
+        # Headings live inside floating text boxes, whose itertext() also
+        # picks up numeric shape-position values and duplicated fallback
+        # content, so match by substring rather than exact equality.
+        return "".join(el.itertext())
+
+    headings = []
+    for i, el in enumerate(children):
+        if el.tag != p_tag:
+            continue
+        txt = text_of(el)
+        if any(label in txt for label in YEAR_GROUP_LABELS):
+            headings.append(i)
+    if not headings:
+        return
+    end_idx = next((i for i, el in enumerate(children)
+                    if el.tag == p_tag and "Appraised by:" in text_of(el)),
+                   len(children))
+
+    slot = 0
+    for gi, start in enumerate(headings):
+        stop = headings[gi + 1] if gi + 1 < len(headings) else end_idx
+        span = children[start:stop]
+        n_tables = sum(1 for el in span if el.tag == tbl_tag)
+        if slot >= n_used_slots:
+            for el in span:
+                body.remove(el)
+        slot += n_tables
 
 
 def _strip_trailing_empty_paragraphs(doc):
@@ -96,10 +166,17 @@ def term_sy_label(term, sy):
 
 # ---------------------------------------------------------------- appraisal
 
-def build_appraisal(student, faculty_map=None):
-    """Return a filled Document for one student (all terms)."""
+def appraisal_template_for(course):
+    return APPRAISAL_TEMPLATES.get((course or "").strip().upper(),
+                                   APPRAISAL_TEMPLATES[DEFAULT_APPRAISAL_COURSE])
+
+
+def build_appraisal(student, faculty_map=None, adviser="", dean=""):
+    """Return a filled Document for one student (all terms). The template
+    (BSCS/BSIT/BLIS/DCT) is picked from the student's course, detected by
+    the parser from the grade listing PDF."""
     faculty_map = faculty_map or {}
-    doc = Document(APPRAISAL_TPL)
+    doc = Document(appraisal_template_for(student.get("course")))
 
     # Name / ID line
     for p in doc.paragraphs:
@@ -119,38 +196,55 @@ def build_appraisal(student, faculty_map=None):
     order = {"1st Term": 0, "2nd Term": 1, "3rd Term": 2, "4th Term": 3}
     keys = sorted(student["terms"].keys(), key=lambda k: (k[1], order.get(k[0], 9)))
 
-    for slot, key in enumerate(keys[:4]):
+    n_slots = len(doc.tables) - 2  # last two tables are the signature blocks
+    for slot, key in enumerate(keys[:n_slots]):
         term, sy = key
         subjects = student["terms"][key]
         table = doc.tables[slot]
         label = term_sy_label(term, sy)
-        n_data_rows = len(table.rows) - 2  # minus header and totals rows
-        while n_data_rows < len(subjects):
-            _add_data_row(table, table.rows[1])
-            n_data_rows += 1
-        for i, subj in enumerate(subjects):
-            row = table.rows[1 + i]
+
+        def set_row(row, subj, label=label):
             _set_cell(row.cells[0], subj["code"], center=True)
             _set_cell(row.cells[1], subj["title"])
             _set_cell(row.cells[2], subj["units"], center=True)
             _set_cell(row.cells[3], subj["grade"], center=True)
             _set_cell(row.cells[4], faculty_map.get(subj["code"].replace(" ", ""), ""))
             _set_cell(row.cells[5], label, center=True)
+
+        _fill_table_rows(table, subjects, 1, set_row, trim=True)
         totals = table.rows[-1]
         _set_cell(totals.cells[2], _total_units(subjects), center=True, bold=True)
+
+    n_used = min(len(keys), n_slots)
+    # A year group can be kept (its first table has data) while its second
+    # table has none, e.g. a student who just started Third Year - that
+    # trailing table was never touched by the loop above, so it's still
+    # the full blank template; trim it down to just header + totals too.
+    for slot in range(n_used, n_slots):
+        table = doc.tables[slot]
+        _fill_table_rows(table, [], 1, lambda row, subj: None, trim=True)
+        _set_cell(table.rows[-1].cells[2], _total_units([]), center=True,
+                  bold=True)
+
+    _remove_unused_year_groups(doc, n_used)
+
+    if adviser:
+        _set_cell(doc.tables[-2].rows[0].cells[0], adviser, size=11, bold=True)
+    if dean:
+        _set_cell(doc.tables[-1].rows[0].cells[0], dean, size=11, bold=True)
 
     _strip_trailing_empty_paragraphs(doc)
     return doc
 
 
-def fill_appraisal(student, faculty_map=None):
-    return _to_buffer(build_appraisal(student, faculty_map))
+def fill_appraisal(student, faculty_map=None, adviser="", dean=""):
+    return _to_buffer(build_appraisal(student, faculty_map, adviser, dean))
 
 
 # ----------------------------------------------------------------- report
 
 def build_report(student, term, sy, subjects, faculty_map=None, adviser="",
-                 trim_rows=True):
+                 dean="", trim_rows=True):
     """Return a filled Document for one student and one term."""
     faculty_map = faculty_map or {}
     doc = Document(REPORT_TPL)
@@ -162,19 +256,7 @@ def build_report(student, term, sy, subjects, faculty_map=None, adviser="",
     _set_cell(info.rows[1].cells[1], term, size=11, bold=True)
     _set_cell(info.rows[1].cells[3], sy, size=11, bold=True)
 
-    grades = doc.tables[1]
-    first_data = 2                      # rows 0-1 are the header
-    last_data = len(grades.rows) - 2    # last row is TOTAL
-    n_slots = last_data - first_data + 1
-
-    # grow if a term ever has more subjects than blank rows
-    while n_slots < len(subjects):
-        _add_data_row(grades, grades.rows[last_data])
-        last_data += 1
-        n_slots += 1
-
-    for i, subj in enumerate(subjects):
-        row = grades.rows[first_data + i]
+    def set_row(row, subj):
         _set_cell(row.cells[0], subj["code"], center=True)
         _set_cell(row.cells[1], subj["title"])
         _set_cell(row.cells[2], subj["units"], center=True)
@@ -182,26 +264,25 @@ def build_report(student, term, sy, subjects, faculty_map=None, adviser="",
         _set_cell(row.cells[4], subj["grade"], center=True)
         _set_cell(row.cells[5], faculty_map.get(subj["code"].replace(" ", ""), ""))
 
-    # remove the unused blank rows between the last subject and TOTAL
-    if trim_rows:
-        for idx in range(last_data, first_data + len(subjects) - 1, -1):
-            _delete_row(grades, grades.rows[idx])
-
+    grades = doc.tables[1]
+    _fill_table_rows(grades, subjects, 2, set_row, trim=trim_rows)
     totals = grades.rows[-1]
     _set_cell(totals.cells[2], _total_units(subjects), center=True, bold=True)
 
+    sig = doc.tables[2]
     if adviser:
-        sig = doc.tables[2]
         _set_cell(sig.rows[0].cells[0], adviser, size=11, bold=True)
+    if dean:
+        _set_cell(sig.rows[0].cells[2], dean, size=11, bold=True)
 
     _strip_trailing_empty_paragraphs(doc)
     return doc
 
 
 def fill_report(student, term, sy, subjects, faculty_map=None, adviser="",
-                trim_rows=True):
+                dean="", trim_rows=True):
     return _to_buffer(build_report(student, term, sy, subjects,
-                                   faculty_map, adviser, trim_rows))
+                                   faculty_map, adviser, dean, trim_rows))
 
 
 # ----------------------------------------------------------------- combine

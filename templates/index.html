@@ -97,7 +97,9 @@
     <div class="card">
       <h2><span class="stepnum">1</span>Grade Listing PDFs</h2>
       <p class="sub">Upload one or more Periodic Grades Listing PDFs.
-      Students are matched across PDFs by ID number.</p>
+      Students are matched across PDFs by ID number. The course found in
+      each PDF (BSCS, BSIT, BLIS or DCT) picks the matching Appraisal
+      Sheet template automatically.</p>
       <input type="file" name="pdfs" accept="application/pdf" multiple required>
       <p style="margin-top:12px">
         <button class="btn secondary" formaction="/preview"
@@ -163,15 +165,29 @@
     </div>
 
     <div class="card">
-      <h2><span class="stepnum">4</span>Options</h2>
-      <label for="adviser">Adviser name (printed on the Report of Rating)</label>
-      <input type="text" name="adviser" id="adviser" value="JUAN M. DELA CRUZ">
+      <h2><span class="stepnum">4</span>Adviser, Dean and Faculty</h2>
+      <label for="adviser">Adviser name * (printed on both documents)</label>
+      <input type="text" name="adviser" id="adviser" required
+        list="advisers" placeholder="e.g. Juan M. Dela Cruz"
+        oninput="uppercaseInput(this)">
+      <datalist id="advisers">
+        {% for n in known_advisers %}<option value="{{ n }}">{% endfor %}
+      </datalist>
+      <label for="dean">Dean name * (printed on both documents)</label>
+      <input type="text" name="dean" id="dean" required
+        list="deans" placeholder="e.g. Rosanne S. Agup, MIS"
+        oninput="uppercaseInput(this)">
+      <datalist id="deans">
+        {% for n in known_deans %}<option value="{{ n }}">{% endfor %}
+      </datalist>
       <label for="faculty_map">Faculty per subject (one per line,
         <code>CODE = Name</code>; leave the name blank to skip)</label>
       <textarea name="faculty_map" id="faculty_map"
-        placeholder="CT103 = Juan Dela Cruz">{{ faculty_prefill or "" }}</textarea>
+        placeholder="CT103 = Juan Dela Cruz"
+        oninput="uppercaseInput(this)">{{ faculty_prefill or "" }}</textarea>
       <p class="hint">After Preview, the subject codes found in your PDFs are
-      filled in here automatically. Just type the names.</p>
+      filled in here automatically, along with any faculty name remembered
+      from a previous run for that code. Just type or edit the names.</p>
     </div>
 
     <button class="btn" formaction="/generate" formmethod="post">
@@ -190,12 +206,19 @@
   advisee, using the Periodic Grades Listing PDFs from the student portal.</p>
   <p>Everything runs locally. The app binds to 127.0.0.1 only, so nothing is
   exposed to your network.</p>
+  <p class="hint">Version {{ app_version() }}</p>
   <p><strong>Developed by Yaksharo a.k.a Ezer</strong></p>
   <button class="btn" onclick="document.getElementById('about').close()">
     Close</button>
 </dialog>
 
 <script>
+  function uppercaseInput(el) {
+    const start = el.selectionStart, end = el.selectionEnd;
+    el.value = el.value.toUpperCase();
+    el.setSelectionRange(start, end);
+  }
+
   const btn = document.getElementById('themeBtn');
   const root = document.documentElement;
   function sysDark() {

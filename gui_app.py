@@ -15,6 +15,9 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk, filedialog, messagebox
 
+import store
+from version import app_version
+
 # Heavy libraries (pdfplumber, python-docx, docxcompose) are loaded
 # lazily on first use so the window appears immediately.
 grade_parser = None
@@ -36,7 +39,6 @@ def resource_path(rel):
 
 
 APP_TITLE = "Advisee Document Filler"
-APP_VERSION = "1.0"
 DEVELOPER = "Yaksharo a.k.a Ezer"
 
 try:
@@ -133,6 +135,7 @@ class Wizard(tk.Tk):
         self.output_mode = tk.StringVar(value="individual")
         self.trim_rows = tk.BooleanVar(value=True)
         self.adviser = tk.StringVar()
+        self.dean = tk.StringVar()
         self.faculty_entries = {}
         self.out_dir = tk.StringVar(value=os.path.join(
             documents_dir(), "AdviseeDocuments"))
@@ -335,7 +338,7 @@ class Wizard(tk.Tk):
         s.configure("Step.TLabel", background=t["bg"], foreground=t["fg"],
                     font=("", self.font_size + 2, "bold"))
         s.configure("TLabelframe", background=t["card"],
-                    bordercolor=t["line"])
+                    bordercolor=t["line"], borderwidth=1, relief="flat")
         s.configure("TLabelframe.Label", background=t["card"],
                     foreground=t["accent"],
                     font=("", self.font_size, "bold"))
@@ -365,8 +368,22 @@ class Wizard(tk.Tk):
                           ("disabled", t["line"])])
         s.configure("TEntry", fieldbackground=t["field"],
                     foreground=t["fg"], insertcolor=t["fg"],
-                    bordercolor=t["line"], borderwidth=1, padding=6)
+                    bordercolor=t["line"], borderwidth=1, relief="flat",
+                    padding=6)
         s.map("TEntry", bordercolor=[("focus", t["accent"])])
+        s.configure("TCombobox", fieldbackground=t["field"],
+                    background=t["field"], foreground=t["fg"],
+                    arrowcolor=t["fg"], bordercolor=t["line"],
+                    borderwidth=1, relief="flat", padding=6)
+        s.map("TCombobox",
+              fieldbackground=[("readonly", t["field"])],
+              background=[("active", t["line"]), ("pressed", t["line"])],
+              bordercolor=[("focus", t["accent"])])
+        self.option_add("*TCombobox*Listbox.background", t["field"])
+        self.option_add("*TCombobox*Listbox.foreground", t["fg"])
+        self.option_add("*TCombobox*Listbox.selectBackground", t["accent"])
+        self.option_add("*TCombobox*Listbox.selectForeground",
+                        t["accent_fg"])
         s.configure("TProgressbar", background=t["accent"],
                     troughcolor=t["card"], bordercolor=t["card"],
                     borderwidth=0, thickness=6)
@@ -399,6 +416,7 @@ class Wizard(tk.Tk):
                 if kind == "listbox":
                     w.configure(bg=t["field"], fg=t["fg"],
                                 highlightbackground=t["line"],
+                                highlightcolor=t["accent"],
                                 selectbackground=t["accent"],
                                 selectforeground=t["accent_fg"])
                 elif kind == "canvas":
@@ -469,9 +487,12 @@ class Wizard(tk.Tk):
         self.progress_lbl = ttk.Label(self, text="", style="Muted.TLabel")
         self.progress_lbl.pack(anchor="w", padx=16)
 
-        self.body = ttk.Frame(self)
-        self.body.pack(fill="both", expand=True, padx=16, pady=8)
-
+        # Pack the bottom nav bar BEFORE the expanding body: Tk's packer
+        # carves cavity in pack order, so if body (fill=both, expand=True)
+        # claimed its space first, a tall step (or a small/restored window)
+        # could squeeze nav down to zero height and hide Back/Next entirely.
+        # Reserving nav's slice first guarantees it stays visible; body
+        # just gets whatever's left above it.
         nav = ttk.Frame(self, padding=(16, 10))
         nav.pack(fill="x", side="bottom")
         self.btn_back = ttk.Button(nav, text="< Back", command=self.go_back)
@@ -485,6 +506,9 @@ class Wizard(tk.Tk):
         self.status = ttk.Label(nav, text="", style="Muted.TLabel")
         self.status.pack(side="left", padx=16)
 
+        self.body = ttk.Frame(self)
+        self.body.pack(fill="both", expand=True, padx=16, pady=8)
+
     def show_about(self):
         top = tk.Toplevel(self)
         top.title(f"About {APP_TITLE}")
@@ -496,7 +520,7 @@ class Wizard(tk.Tk):
         frame.pack(fill="both", expand=True)
         ttk.Label(frame, text=APP_TITLE,
                   font=("", self.font_size + 4, "bold")).pack(anchor="w")
-        ttk.Label(frame, text=f"Version {APP_VERSION}",
+        ttk.Label(frame, text=f"Version {app_version()}",
                   style="Muted.TLabel").pack(anchor="w", pady=(0, 12))
         ttk.Label(frame, justify="left", text=(
             "Fills the UNP CCIT Appraisal Sheet (VPAA-CCIT-QF-05) and\n"
@@ -555,14 +579,42 @@ class Wizard(tk.Tk):
     # ------------------------------------------------------- step 1: files
     def _step_files(self):
         f = self.body
+        names = ttk.LabelFrame(f, text="Adviser and Dean (required)",
+                               padding=10)
+        names.pack(fill="x", pady=(0, 10))
+        ttk.Label(names, text="Adviser name *",
+                 style="Card.TLabel").grid(row=0, column=0, sticky="w")
+        adviser_box = ttk.Combobox(names, textvariable=self.adviser,
+                                   values=store.known_people("adviser"),
+                                   width=34)
+        adviser_box.grid(row=1, column=0, sticky="w", padx=(0, 20))
+        self._add_placeholder(names, adviser_box, self.adviser,
+                              "e.g. Juan M. Dela Cruz")
+        self._force_uppercase(adviser_box, self.adviser)
+        ttk.Label(names, text="Dean name *",
+                 style="Card.TLabel").grid(row=0, column=1, sticky="w")
+        dean_box = ttk.Combobox(names, textvariable=self.dean,
+                                values=store.known_people("dean"), width=34)
+        dean_box.grid(row=1, column=1, sticky="w")
+        self._add_placeholder(names, dean_box, self.dean,
+                              "e.g. Rosanne S. Agup, MIS")
+        self._force_uppercase(dean_box, self.dean)
+        ttk.Label(names, text="Printed on the signature lines of both "
+                              "documents. Remembered for next time.",
+                  style="Card.TLabel").grid(row=2, column=0, columnspan=2,
+                                            sticky="w", pady=(6, 0))
+
         ttk.Label(f, text="Select one or more Periodic Grades Listing "
                           "PDFs. You can pick several terms at once.\n"
                           "Students are matched across PDFs by ID "
-                          "number.").pack(anchor="w", pady=6)
+                          "number. The course found in each PDF picks "
+                          "the matching Appraisal Sheet "
+                          "template.").pack(anchor="w", pady=6)
         ttk.Button(f, text="Add PDF files...", style="Accent.TButton",
                    command=self._pick_pdfs).pack(anchor="w", pady=6)
-        self.file_list = tk.Listbox(f, height=8, borderwidth=1,
-                                    relief="solid", activestyle="none")
+        self.file_list = tk.Listbox(f, height=8, borderwidth=0,
+                                    relief="flat", highlightthickness=1,
+                                    selectborderwidth=0, activestyle="none")
         self.file_list.pack(fill="both", expand=True, pady=6)
         self._themed_plain.append((self.file_list, "listbox"))
         for p in self.pdf_paths:
@@ -586,9 +638,16 @@ class Wizard(tk.Tk):
 
     def _parse_async(self):
         """Parse PDFs on a worker thread so the window never freezes."""
+        if not self.adviser.get().strip() or not self.dean.get().strip():
+            messagebox.showwarning(APP_TITLE,
+                                   "Adviser name and Dean name are "
+                                   "required before continuing.")
+            return
         if not self.pdf_paths:
             messagebox.showwarning(APP_TITLE, "Please add at least one PDF.")
             return
+        store.remember_person("adviser", self.adviser.get())
+        store.remember_person("dean", self.dean.get())
         self.busy = True
         self.btn_next.config(state="disabled")
         self.btn_back.config(state="disabled")
@@ -709,6 +768,10 @@ class Wizard(tk.Tk):
         ttk.Checkbutton(box3, text="Remove unused blank rows in the Report "
                                    "of Rating table",
                         variable=self.trim_rows).pack(anchor="w", pady=2)
+        ttk.Label(box3, text="The Appraisal Sheet always removes unused "
+                             "rows, and drops any year/term section past "
+                             "the student's last parsed term.",
+                  style="Card.TLabel").pack(anchor="w", pady=2)
 
     def _leave_documents(self):
         if not (self.doc_appraisal.get() or self.doc_report.get()):
@@ -734,16 +797,14 @@ class Wizard(tk.Tk):
 
     def _step_faculty(self):
         f = self.body
-        ttk.Label(f, text="Adviser name (printed on the Report of "
-                          "Rating):").pack(anchor="w", pady=4)
-        adviser_entry = ttk.Entry(f, textvariable=self.adviser, width=44)
-        adviser_entry.pack(anchor="w")
-        self._add_placeholder(f, adviser_entry, self.adviser,
-                              "e.g. Juan M. Dela Cruz")
-        ttk.Label(f, text="\nFaculty per subject. These codes were found "
-                          "in your PDFs. Leave a name blank\nand the "
-                          "column stays blank in the "
-                          "documents.").pack(anchor="w", pady=4)
+        ttk.Label(f, text=f"Adviser: {self.adviser.get()}      "
+                          f"Dean: {self.dean.get()}",
+                  style="Muted.TLabel").pack(anchor="w", pady=(0, 4))
+        ttk.Label(f, text="Faculty per subject. These codes were found in "
+                          "your PDFs. Pick a name you've used before or "
+                          "type a new one; leave it blank and the column "
+                          "stays blank in the documents.").pack(anchor="w",
+                                                                pady=4)
         canvas, inner = self._scroll_area(f)
         hdr = ttk.Frame(inner, style="Card.TFrame")
         hdr.pack(fill="x")
@@ -751,17 +812,26 @@ class Wizard(tk.Tk):
                        ("Faculty name", 28)]:
             ttk.Label(hdr, text=txt, width=w, style="Card.TLabel",
                       font=("", self.font_size, "bold")).pack(side="left")
-        for code, title in self._subject_codes():
-            var = self.faculty_entries.setdefault(code, tk.StringVar())
+        codes = self._subject_codes()
+        known = store.faculty_for_codes([c for c, _ in codes])
+        roster = store.known_faculty_names()
+        for code, title in codes:
+            var = self.faculty_entries.get(code)
+            if var is None:
+                var = tk.StringVar(value=known.get(
+                    code.replace(" ", "").upper(), ""))
+                self.faculty_entries[code] = var
             row = ttk.Frame(inner, style="Card.TFrame")
             row.pack(fill="x", pady=1)
             ttk.Label(row, text=code, width=11,
                       style="Card.TLabel").pack(side="left")
             ttk.Label(row, text=title[:46], width=42,
                       style="Card.TLabel").pack(side="left")
-            fac_entry = ttk.Entry(row, textvariable=var, width=30)
-            fac_entry.pack(side="left")
-            self._add_placeholder(row, fac_entry, var, "e.g. Juan Dela Cruz")
+            fac_box = ttk.Combobox(row, textvariable=var, values=roster,
+                                   width=28)
+            fac_box.pack(side="left")
+            self._add_placeholder(row, fac_box, var, "e.g. Juan Dela Cruz")
+            self._force_uppercase(fac_box, var)
 
     # ---------------------------------------------------- step 5: generate
     def _step_generate(self):
@@ -846,16 +916,21 @@ class Wizard(tk.Tk):
                 "Pick another folder (use Browse to avoid typos).")
             return
 
+        faculty_map = {c.replace(" ", "").upper(): v.get().strip()
+                      for c, v in self.faculty_entries.items()
+                      if v.get().strip()}
+        for code, name in faculty_map.items():
+            store.remember_faculty(code, name)
+
         cfg = {
             "out_root": out_root,
             "students": [s for sid, s in sorted(
                 self.merged.items(), key=lambda kv: kv[1]["name"])
                 if self.student_vars.get(sid) is not None
                 and self.student_vars[sid].get()],
-            "faculty_map": {c.replace(" ", "").upper(): v.get().strip()
-                            for c, v in self.faculty_entries.items()
-                            if v.get().strip()},
+            "faculty_map": faculty_map,
             "adviser": self.adviser.get().strip(),
+            "dean": self.dean.get().strip(),
             "trim": self.trim_rows.get(),
             "picked": {k for k, v in self.term_vars.items() if v.get()},
             "mode": self.output_mode.get(),
@@ -915,12 +990,13 @@ class Wizard(tk.Tk):
 
     def _run_job(self, kind, payload, cfg):
         out_root = cfg["out_root"]
-        fm, adv, trim = cfg["faculty_map"], cfg["adviser"], cfg["trim"]
+        fm, adv, dean, trim = (cfg["faculty_map"], cfg["adviser"],
+                               cfg["dean"], cfg["trim"])
         if kind == "appraisal":
             s = payload
             folder = os.path.join(out_root, "Appraisal_Sheets")
             os.makedirs(folder, exist_ok=True)
-            buf = filler.fill_appraisal(s, fm)
+            buf = filler.fill_appraisal(s, fm, adv, dean)
             path = os.path.join(folder,
                                 f"{safe_name(s['name'])}_{s['id']}.docx")
             with open(path, "wb") as fh:
@@ -932,13 +1008,14 @@ class Wizard(tk.Tk):
                                   f"{tslug}_{sy}")
             os.makedirs(folder, exist_ok=True)
             buf = filler.fill_report(s, term, sy, s["terms"][(term, sy)],
-                                     fm, adv, trim)
+                                     fm, adv, dean, trim)
             path = os.path.join(folder,
                                 f"{safe_name(s['name'])}_{s['id']}.docx")
             with open(path, "wb") as fh:
                 fh.write(buf.read())
         elif kind == "appraisal_all":
-            docs = [filler.build_appraisal(s, fm) for s in cfg["students"]]
+            docs = [filler.build_appraisal(s, fm, adv, dean)
+                    for s in cfg["students"]]
             buf = filler.combine_documents(docs)
             if buf:
                 with open(os.path.join(out_root,
@@ -948,7 +1025,7 @@ class Wizard(tk.Tk):
         elif kind == "report_all":
             term, sy = payload
             docs = [filler.build_report(s, term, sy, s["terms"][(term, sy)],
-                                        fm, adv, trim)
+                                        fm, adv, dean, trim)
                     for s in cfg["students"] if (term, sy) in s["terms"]]
             buf = filler.combine_documents(docs)
             if buf:
@@ -1012,6 +1089,27 @@ class Wizard(tk.Tk):
         sync()
         self._themed_plain.append((ph, "phlabel"))
         return ph
+
+    def _force_uppercase(self, entry, var):
+        """Names are always typed in caps on these forms; enforce it as the
+        user types instead of relying on them to hit Caps Lock."""
+        def on_write(*_a):
+            cur = var.get()
+            upper = cur.upper()
+            if upper != cur:
+                pos = entry.index(tk.INSERT)
+                var.set(upper)
+                entry.icursor(pos)
+
+        trace_id = var.trace_add("write", on_write)
+
+        def on_destroy(_e=None):
+            try:
+                var.trace_remove("write", trace_id)
+            except tk.TclError:
+                pass
+
+        entry.bind("<Destroy>", on_destroy, add="+")
 
     def _scroll_area(self, parent):
         holder = ttk.Frame(parent, style="Card.TFrame")
