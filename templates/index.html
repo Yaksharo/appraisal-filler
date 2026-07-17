@@ -168,14 +168,14 @@
       <h2><span class="stepnum">4</span>Adviser, Dean and Faculty</h2>
       <label for="adviser">Adviser name * (printed on both documents)</label>
       <input type="text" name="adviser" id="adviser" required
-        list="advisers" placeholder="e.g. Juan M. Dela Cruz"
+        list="advisers" placeholder="e.g. Anna Log, MIT"
         oninput="uppercaseInput(this)">
       <datalist id="advisers">
         {% for n in known_advisers %}<option value="{{ n }}">{% endfor %}
       </datalist>
       <label for="dean">Dean name * (printed on both documents)</label>
       <input type="text" name="dean" id="dean" required
-        list="deans" placeholder="e.g. Rosanne S. Agup, MIS"
+        list="deans" placeholder="e.g. Kimi No N. Wa, PhD"
         oninput="uppercaseInput(this)">
       <datalist id="deans">
         {% for n in known_deans %}<option value="{{ n }}">{% endfor %}
@@ -183,7 +183,7 @@
       <label for="faculty_map">Faculty per subject (one per line,
         <code>CODE = Name</code>; leave the name blank to skip)</label>
       <textarea name="faculty_map" id="faculty_map"
-        placeholder="CT103 = Juan Dela Cruz"
+        placeholder="CT103 = Cy Burr, MSIT&#10;CT104 = Al Gorithm, MSCS&#10;CT105 = Justin Case, MLIS"
         oninput="uppercaseInput(this)">{{ faculty_prefill or "" }}</textarea>
       <p class="hint">After Preview, the subject codes found in your PDFs are
       filled in here automatically, along with any faculty name remembered

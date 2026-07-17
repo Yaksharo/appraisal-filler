@@ -165,7 +165,7 @@ Generate), and the web app does the same work on a single page with a
 4. Adviser and Dean are already filled in from step 1. Optionally map
    instructors per subject code (desktop: a dropdown/entry per code,
    pre-filled from names you've used before; web: one per line, like
-   `CT103 = Juan Dela Cruz`). The PDF has no instructor names, so the
+   `CT103 = Cy Burr, MSIT`). The PDF has no instructor names, so the
    Faculty and Instructor columns stay blank unless you map them — leaving
    a faculty field empty also leaves it blank in the generated documents,
    it does not fall back to a placeholder name.

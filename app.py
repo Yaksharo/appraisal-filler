@@ -22,7 +22,7 @@ def _safe(name):
 
 
 def _parse_faculty_map(text):
-    """Lines like 'CT103 = Juan M. Dela Cruz' -> {'CT103': 'Juan M. Dela Cruz'}"""
+    """Lines like 'CT103 = Cy Burr, MSIT' -> {'CT103': 'Cy Burr, MSIT'}"""
     out = {}
     for line in (text or "").splitlines():
         if "=" in line:

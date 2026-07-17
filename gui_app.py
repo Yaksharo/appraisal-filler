@@ -7,6 +7,7 @@ Developed by Yaksharo a.k.a Ezer
 """
 import os
 import queue
+import random
 import subprocess
 import sys
 import threading
@@ -40,6 +41,15 @@ def resource_path(rel):
 
 APP_TITLE = "Advisee Document Filler"
 DEVELOPER = "Yaksharo a.k.a Ezer"
+
+# Fictional example names for the Faculty step's placeholder text, never
+# a real person - shuffled and handed out one per row so no two subject
+# rows show the same hint.
+FACULTY_NAME_EXAMPLES = [
+    "Cy Burr, MSIT", "Al Gorithm, MSCS", "Xavier Bytes, MEd",
+    "Justin Case, MLIS", "Dee Bugger, MSCS", "Ima Genius, MIT",
+    "Micro Chip, MBA", "Rea Boot, MSIT",
+]
 
 try:
     import darkdetect
@@ -589,7 +599,7 @@ class Wizard(tk.Tk):
                                    width=34)
         adviser_box.grid(row=1, column=0, sticky="w", padx=(0, 20))
         self._add_placeholder(names, adviser_box, self.adviser,
-                              "e.g. Juan M. Dela Cruz")
+                              "e.g. Anna Log, MIT")
         self._force_uppercase(adviser_box, self.adviser)
         ttk.Label(names, text="Dean name *",
                  style="Card.TLabel").grid(row=0, column=1, sticky="w")
@@ -597,7 +607,7 @@ class Wizard(tk.Tk):
                                 values=store.known_people("dean"), width=34)
         dean_box.grid(row=1, column=1, sticky="w")
         self._add_placeholder(names, dean_box, self.dean,
-                              "e.g. Rosanne S. Agup, MIS")
+                              "e.g. Kimi No N. Wa, PhD")
         self._force_uppercase(dean_box, self.dean)
         ttk.Label(names, text="Printed on the signature lines of both "
                               "documents. Remembered for next time.",
@@ -815,7 +825,9 @@ class Wizard(tk.Tk):
         codes = self._subject_codes()
         known = store.faculty_for_codes([c for c, _ in codes])
         roster = store.known_faculty_names()
-        for code, title in codes:
+        examples = list(FACULTY_NAME_EXAMPLES)
+        random.shuffle(examples)
+        for i, (code, title) in enumerate(codes):
             var = self.faculty_entries.get(code)
             if var is None:
                 var = tk.StringVar(value=known.get(
@@ -830,7 +842,8 @@ class Wizard(tk.Tk):
             fac_box = ttk.Combobox(row, textvariable=var, values=roster,
                                    width=28)
             fac_box.pack(side="left")
-            self._add_placeholder(row, fac_box, var, "e.g. Juan Dela Cruz")
+            hint = f"e.g. {examples[i % len(examples)]}"
+            self._add_placeholder(row, fac_box, var, hint)
             self._force_uppercase(fac_box, var)
 
     # ---------------------------------------------------- step 5: generate
