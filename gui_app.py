@@ -892,10 +892,12 @@ class Wizard(tk.Tk):
         ttk.Button(out, text="Browse...",
                    command=self._pick_out_dir).pack(side="left")
 
+        # Not packed yet - an empty, near-invisible progress bar plus a
+        # blank status line just left a dead gap here before the user had
+        # even clicked Generate. They're inserted (via `before=`) right
+        # above the Generate button once a run actually starts.
         self.progress = ttk.Progressbar(f, mode="determinate")
-        self.progress.pack(fill="x", pady=10)
         self.gen_status = ttk.Label(f, text="", style="Muted.TLabel")
-        self.gen_status.pack(anchor="w")
 
         self.btn_generate = ttk.Button(f, text="Generate documents",
                                        style="Accent.TButton",
@@ -967,6 +969,9 @@ class Wizard(tk.Tk):
         }
         self.btn_generate.config(state="disabled")
         self.btn_open.config(state="disabled")
+        if not self.progress.winfo_ismapped():
+            self.progress.pack(fill="x", pady=10, before=self.btn_generate)
+            self.gen_status.pack(anchor="w", before=self.btn_generate)
         threading.Thread(target=self._generate, args=(cfg,),
                          daemon=True).start()
 
