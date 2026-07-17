@@ -1,15 +1,125 @@
+<div align="center">
+
+<img src="assets/logo.png" alt="Advisee Document Filler logo" width="96" />
+
 # Advisee Document Filler
 
-A small tool for UNP CCIT advisers, available as a standalone desktop app
-or a local web app. It reads Periodic Grades Listing PDFs from the student
-portal and fills two official forms for every advisee.
+A small tool for UNP CCIT advisers that turns Periodic Grades Listing PDFs
+into filled Appraisal Sheets and Reports of Rating — as a standalone
+desktop app or a local web app.
 
-- Appraisal Sheet (VPAA-CCIT-QF-05), one per student, all terms in one file,
-  using the template that matches the student's course (BSCS, BSIT, BLIS
-  or DCT), auto-detected from the PDF
-- Report of Rating (VPAA-CCIT-QF-09), one per student per term
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey)]()
+[![Sigstore verified](https://img.shields.io/badge/releases-Sigstore%20signed-6f42c1)](#verifying-a-release-sigstore)
 
-## Two ways to run it
+</div>
+
+---
+
+## About
+
+Every term, CCIT advisers have to turn the registrar's Periodic Grades
+Listing PDF into two official forms, by hand, for every advisee:
+
+- **Appraisal Sheet** (VPAA-CCIT-QF-05) — one per student, all terms in
+  one file, using the template that matches the student's course (BSCS,
+  BSIT, BLIS or DCT), auto-detected from the PDF.
+- **Report of Rating** (VPAA-CCIT-QF-09) — one per student per term.
+
+Advisee Document Filler reads the grade listing PDFs, matches students
+across terms, and generates both documents automatically.
+
+## Why I Built This
+
+Filling these forms by hand is repetitive, error-prone, and doesn't scale
+past a handful of advisees. This tool exists so an adviser can point it at
+the PDFs the registrar already provides and get correctly formatted,
+ready-to-print documents back in a few clicks — no copy-pasting names and
+grades between spreadsheets and Word templates.
+
+## Features
+
+- ✓ Parses the registrar's Periodic Grades Listing PDF directly — no manual data entry
+- ✓ Auto-detects course (BSCS, BSIT, BLIS, DCT) and picks the matching template
+- ✓ Matches students across multiple term PDFs by ID number
+- ✓ Fills Appraisal Sheets and Reports of Rating, with unused rows trimmed automatically
+- ✓ Individual docx per student, or one merged batch file for bulk printing
+- ✓ Remembers Adviser, Dean, and per-subject faculty names locally for next time
+- ✓ Runs as a desktop wizard (no browser) or a loopback-only local web app
+- ✓ Light/dark theme, resizable text, native look on Windows and Linux
+- ✓ Signed, verifiable releases built entirely on GitHub's runners
+
+## How It Works
+
+```mermaid
+flowchart TD
+    A[Grade Listing PDFs] --> B[Parser extracts students, course, grades]
+    B --> C[Students matched across terms by ID number]
+    C --> D[Course code selects Appraisal Sheet template]
+    D --> E[Documents filled: Appraisal Sheet + Report of Rating]
+    E --> F[Unused rows trimmed]
+    F --> G[docx output: individual files or one merged batch]
+```
+
+1. You add one or more grade listing PDFs and enter the Adviser and Dean.
+2. The parser reads each PDF, matching students by ID number across terms.
+3. The course found in each PDF picks the matching Appraisal Sheet template.
+4. Both documents are filled and blank rows are trimmed automatically.
+5. Output is generated as individual docx files or one merged batch file.
+
+## Architecture
+
+**Language:** Python 3
+
+**Libraries:** Flask · pdfplumber · python-docx · docxcompose · darkdetect
+
+**Packaging:** PyInstaller (onedir builds), Inno Setup (Windows installer),
+deb/rpm/pkg (Linux), GitHub Actions, Sigstore/cosign
+
+```mermaid
+flowchart LR
+    subgraph UI
+        GUI[Desktop wizard - Tkinter]
+        WEB[Web app - Flask + HTML]
+    end
+    GUI --> CORE
+    WEB --> CORE
+    subgraph CORE[Shared core]
+        PARSER[parser.py]
+        FILLER[filler.py]
+        STORE[store.py - SQLite]
+    end
+    PARSER --> FILLER
+    STORE --> FILLER
+    FILLER --> DOCX[templates_docx/*.docx]
+    DOCX --> OUT[Generated .docx output]
+```
+
+Both the desktop app and the web app are thin UIs over the same parsing
+and filling logic, so behavior stays identical between the two.
+
+## Project Structure
+
+```
+appraisal-filler/
+├── app.py               # Flask web app
+├── gui_app.py            # Tkinter desktop wizard
+├── parser.py              # Periodic Grades Listing PDF parser
+├── filler.py               # Fills the docx templates
+├── store.py                # Local SQLite store for remembered names
+├── version.py               # Resolves the running build's version
+├── templates_docx/           # Appraisal Sheet / Report of Rating .docx templates
+├── templates/                # Web app HTML
+├── static/                    # Web app assets (favicon, etc.)
+├── assets/                     # App icon / logo
+├── signing/                     # Windows publisher certificate
+├── build_windows.bat             # Local Windows PyInstaller build
+├── build_linux.sh                 # Local Linux PyInstaller build
+├── installer.iss                   # Inno Setup script for the Windows installer
+└── .github/workflows/                # CI: builds executables and Linux packages
+```
+
+## Installation
 
 ### A. Standalone desktop app (recommended, no browser)
 
@@ -51,104 +161,39 @@ It binds to 127.0.0.1 only (loopback, not visible to your network) and
 picks a free port in the dynamic private range (49152-65535). The exact
 address is printed on start.
 
-## Build with GitHub (no local build needed)
+### Prebuilt releases
 
-Push this project to a GitHub repository. The included workflow at
-`.github/workflows/build.yml` builds both executables on GitHub's own
-Windows and Linux machines, so you never build on your own computer.
+**Windows**, two options from the same build:
 
-- Manual build: open the repo's Actions tab, pick "Build executables",
-  click "Run workflow", wait a few minutes. This publishes/updates a
-  rolling "latest" pre-release on the repo's Releases page with every
-  build attached, so it's shareable without anyone needing to sign in
-  (unlike raw workflow-run artifacts, which are private and expire).
-- Release build: create and push a tag like `v1.0`
-  (`git tag v1.0 && git push origin v1.0`). GitHub builds both binaries
-  and attaches them to a proper versioned Release page instead of the
-  rolling "latest" one.
+1. Installer: run `AdviseeDocFiller-Setup-1.0.exe`. It installs to
+   `C:\Program Files\Yaksharo Solutions\Advisee Document Filler`, adds a
+   Start Menu entry (and optional desktop icon), and registers a normal
+   uninstaller in Windows Settings.
+2. Portable: download `AdviseeDocFiller-windows-portable.zip`, extract
+   it once anywhere (USB stick included), run `AdviseeDocFiller.exe`
+   inside. Copy-paste the folder to move it. Keep the exe next to its
+   `_internal` folder.
 
-## Verifying a release (Sigstore)
+**Linux portable:** `AdviseeDocFiller-linux.tar.gz`, extract and run.
 
-Every release includes `SHA256SUMS`, `SHA256SUMS.sig`, and
-`SHA256SUMS.pem`. These prove the published files were built by this
-repo's `build.yml` on GitHub's runners and haven't been altered since,
-using [Sigstore](https://www.sigstore.dev/) keyless signing (no private
-key to leak, verifiable against the public Rekor transparency log).
-This is a supply-chain integrity check, not a Windows/Authenticode
-signature - it won't change the SmartScreen or "Unknown Publisher"
-prompt, which come from a separate, CA-based trust system.
-
-To verify with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/):
-
-```
-cosign verify-blob \
-  --certificate SHA256SUMS.pem \
-  --signature SHA256SUMS.sig \
-  --certificate-identity-regexp "^https://github.com/Yaksharo/appraisal-filler/" \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  SHA256SUMS
-```
-
-Then confirm your downloaded file's hash appears in `SHA256SUMS`
-(`sha256sum -c SHA256SUMS` on Linux, `certutil -hashfile <file> SHA256`
-on Windows).
-
-## Startup speed
-
-Builds use PyInstaller's onedir mode: the app is a folder with the
-executable inside, next to an `_internal` folder. It starts in about a
-second. The old single-file mode had to unpack everything to a temp
-directory on every launch, which is why it felt slow. Heavy libraries
-also load lazily now, so the window appears immediately and the PDF
-engine loads in the background the first time you click Next.
-
-- Windows, two options from the same build:
-  1. Installer: run `AdviseeDocFiller-Setup-1.0.exe`. It installs to
-     `C:\Program Files\Yaksharo Solutions\Advisee Document Filler`,
-     adds a Start Menu entry (and optional desktop icon), and registers
-     a normal uninstaller in Windows Settings.
-  2. Portable: download `AdviseeDocFiller-windows-portable.zip`, extract
-     it once anywhere (USB stick included), run `AdviseeDocFiller.exe`
-     inside. Copy-paste the folder to move it. Keep the exe next to its
-     `_internal` folder.
-- Linux portable: `AdviseeDocFiller-linux.tar.gz`, extract and run.
-- Linux packages install the folder to /opt and handle everything.
-
-## Linux packages (deb, rpm, Arch)
-
-The GitHub workflow also builds proper installers for the three big
-Linux families, uploaded as the `linux-packages` artifact and attached
-to Releases:
+**Linux packages** (built for the three big families, attached to Releases):
 
 - Debian / Ubuntu / Mint: `sudo apt install ./adviseedocfiller_*.deb`
 - Fedora / RHEL / openSUSE: `sudo dnf install ./adviseedocfiller-*.rpm`
 - Arch / Manjaro: `sudo pacman -U adviseedocfiller-*.pkg.tar.zst`
 
-Each package installs the app to /opt/AdviseeDocFiller, adds an
+Each package installs the app to `/opt/AdviseeDocFiller`, adds an
 `adviseedocfiller` command, and registers a menu entry with the app
 icon. Note: the binary inside is built on GitHub's Ubuntu runner, so it
 needs a distro with the same or newer glibc. Arch and current Fedora
 are fine; very old LTS releases may not be.
 
-## Window style
+Builds use PyInstaller's onedir mode: the app is a folder with the
+executable inside, next to an `_internal` folder. It starts in about a
+second — heavy libraries load lazily, so the window appears immediately
+and the PDF engine loads in the background the first time you click Next.
 
-- Linux: the app keeps your desktop environment's native titlebar, so
-  it automatically matches GNOME, KDE, XFCE, or whatever you run.
-- Windows: the app draws its own borderless titlebar that follows the
-  light/dark theme, with minimize, maximize/restore, and close buttons,
-  drag-to-move, double-click to maximize, and a resize grip at the
-  bottom-right.
-
-## Themes and accessibility
-
-- Desktop app: a flat, neutral white/grey/black look with a single blue
-  accent, styled to blend in with the default light/dark themes of
-  Windows 10/11, GNOME, and KDE. Follows your system light/dark theme on
-  startup, with a toggle in the header. A- and A+ buttons resize all text.
-- Web app: follows the system theme, with a toggle that remembers your
-  choice.
-
-## How to use
+## Usage
 
 Both apps walk through the same steps; the desktop wizard breaks them
 into pages (PDF Files &rarr; Students &rarr; Documents &rarr; Faculty &rarr;
@@ -175,7 +220,7 @@ Generate), and the web app does the same work on a single page with a
 6. For Reports of Rating you can also untick terms you don't need.
 7. Click Generate.
 
-## Remembering names (local database)
+### Remembering names (local database)
 
 The app keeps a small local SQLite database (`store.db`, in the OS's
 standard per-user app-data folder — never bundled, never synced) of every
@@ -186,7 +231,7 @@ subject code it recognizes from a previous run. You can still type a new
 name at any time — nothing is required to already be in the list. Nothing
 in this database ever leaves the machine.
 
-## How the data maps
+### How the data maps
 
 - The periodic rating column in the PDF goes to the Midterm cell of the
   Report of Rating. The Grade column goes to the Final cell.
@@ -207,6 +252,92 @@ in this database ever leaves the machine.
   `filler.py` if your format differs.
 - Total units per term is computed and placed in the totals row.
 
+## Building & Releasing
+
+### Build with GitHub (no local build needed)
+
+Push this project to a GitHub repository. The included workflow at
+`.github/workflows/build.yml` builds both executables on GitHub's own
+Windows and Linux machines, so you never build on your own computer.
+
+- Manual build: open the repo's Actions tab, pick "Build executables",
+  click "Run workflow", wait a few minutes. This publishes/updates a
+  rolling "latest" pre-release on the repo's Releases page with every
+  build attached, so it's shareable without anyone needing to sign in
+  (unlike raw workflow-run artifacts, which are private and expire).
+- Release build: create and push a tag like `v1.0`
+  (`git tag v1.0 && git push origin v1.0`). GitHub builds both binaries
+  and attaches them to a proper versioned Release page instead of the
+  rolling "latest" one.
+
+### Verifying a release (Sigstore)
+
+Every release includes `SHA256SUMS`, `SHA256SUMS.sig`, and
+`SHA256SUMS.pem`. These prove the published files were built by this
+repo's `build.yml` on GitHub's runners and haven't been altered since,
+using [Sigstore](https://www.sigstore.dev/) keyless signing (no private
+key to leak, verifiable against the public Rekor transparency log).
+This is a supply-chain integrity check, not a Windows/Authenticode
+signature - it won't change the SmartScreen or "Unknown Publisher"
+prompt, which come from a separate, CA-based trust system.
+
+To verify with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/):
+
+```
+cosign verify-blob \
+  --certificate SHA256SUMS.pem \
+  --signature SHA256SUMS.sig \
+  --certificate-identity-regexp "^https://github.com/Yaksharo/appraisal-filler/" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  SHA256SUMS
+```
+
+Then confirm your downloaded file's hash appears in `SHA256SUMS`
+(`sha256sum -c SHA256SUMS` on Linux, `certutil -hashfile <file> SHA256`
+on Windows).
+
+## Platform Details
+
+<details>
+<summary>Window style</summary>
+
+- Linux: the app keeps your desktop environment's native titlebar, so
+  it automatically matches GNOME, KDE, XFCE, or whatever you run.
+- Windows: the app draws its own borderless titlebar that follows the
+  light/dark theme, with minimize, maximize/restore, and close buttons,
+  drag-to-move, double-click to maximize, and a resize grip at the
+  bottom-right.
+
+</details>
+
+<details>
+<summary>Themes and accessibility</summary>
+
+- Desktop app: a flat, neutral white/grey/black look with a single blue
+  accent, styled to blend in with the default light/dark themes of
+  Windows 10/11, GNOME, and KDE. Follows your system light/dark theme on
+  startup, with a toggle in the header. A- and A+ buttons resize all text.
+- Web app: follows the system theme, with a toggle that remembers your
+  choice.
+
+</details>
+
+<details>
+<summary>App icon</summary>
+
+The logo in `assets/` is used everywhere automatically:
+
+- Windows: the exe file icon (embedded at build time) and the window
+  and taskbar icon at runtime.
+- Linux: the window and taskbar icon at runtime. Linux binaries cannot
+  embed a file icon, so for a launcher/menu icon copy the binary and
+  `assets/logo.png` somewhere permanent (e.g. `/opt/AdviseeDocFiller/`),
+  adjust the paths inside `AdviseeDocFiller.desktop`, and copy that file
+  to `~/.local/share/applications/`.
+- Web app: the same logo is served as the favicon.
+
+</details>
+
 ## Notes
 
 - The templates live in `templates_docx/`. Replace them with updated forms
@@ -225,19 +356,10 @@ in this database ever leaves the machine.
   workflow from the git tag) and falling back to `git describe` when
   running from source. See `version.py`.
 
-## App icon
+## License
 
-The logo in `assets/` is used everywhere automatically:
+[MIT](LICENSE)
 
-- Windows: the exe file icon (embedded at build time) and the window
-  and taskbar icon at runtime.
-- Linux: the window and taskbar icon at runtime. Linux binaries cannot
-  embed a file icon, so for a launcher/menu icon copy the binary and
-  `assets/logo.png` somewhere permanent (e.g. `/opt/AdviseeDocFiller/`),
-  adjust the paths inside `AdviseeDocFiller.desktop`, and copy that file
-  to `~/.local/share/applications/`.
-- Web app: the same logo is served as the favicon.
+## Author
 
-## Credits
-
-Developed by Yaksharo a.k.a Ezer
+Developed by **Yaksharo** a.k.a. Ezer
