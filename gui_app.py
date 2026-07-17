@@ -625,12 +625,17 @@ class Wizard(tk.Tk):
         self.file_list = tk.Listbox(f, height=8, borderwidth=0,
                                     relief="flat", highlightthickness=1,
                                     selectborderwidth=0, activestyle="none")
-        self.file_list.pack(fill="both", expand=True, pady=6)
         self._themed_plain.append((self.file_list, "listbox"))
         for p in self.pdf_paths:
             self.file_list.insert("end", p)
+        # Reserve the button's space at the bottom first, then let the
+        # listbox fill whatever's left above it - packing the listbox
+        # (fill/expand) first could claim all the cavity on short windows
+        # and leave the button with no room to draw.
         ttk.Button(f, text="Remove selected",
-                   command=self._remove_pdf).pack(anchor="w")
+                   command=self._remove_pdf).pack(side="bottom", anchor="w",
+                                                  pady=(6, 0))
+        self.file_list.pack(fill="both", expand=True, pady=6)
 
     def _pick_pdfs(self):
         paths = filedialog.askopenfilenames(
