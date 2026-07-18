@@ -219,6 +219,7 @@ class Wizard(tk.Tk):
         self.wm_withdraw()
         self.after(30, self._reshow_on_top)
         self.bind("<Map>", self._on_map)
+        self.bind("<Unmap>", self._on_unmap)
 
     def _set_appwindow_style(self):
         """Borderless windows lose their taskbar button and alt-tab entry
@@ -259,6 +260,17 @@ class Wizard(tk.Tk):
         # iconify() needs decorations on Windows, so drop them briefly
         self.overrideredirect(False)
         self.iconify()
+
+    def _on_unmap(self, _event=None):
+        # Minimizing via the taskbar icon (or Win+Down, or the taskbar's
+        # own right-click menu) bypasses _minimize() and asks Windows to
+        # iconify the window directly. A borderless (overrideredirect)
+        # window has no caption/minimize-box styling, so Windows can't
+        # iconify it properly and the window just disappears instead -
+        # drop the borderless style here too so any minimize path leaves
+        # it in a state Windows can actually restore from.
+        if self._custom_titlebar and self.overrideredirect():
+            self.overrideredirect(False)
 
     def _toggle_zoom(self):
         if self._is_zoomed:
@@ -919,9 +931,11 @@ class Wizard(tk.Tk):
             if sys.platform.startswith("win"):
                 os.startfile(path)  # noqa
             elif sys.platform == "darwin":
-                os.system(f'open "{path}"')
+                subprocess.Popen(["open", path])
             else:
-                os.system(f'xdg-open "{path}" >/dev/null 2>&1 &')
+                subprocess.Popen(["xdg-open", path],
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
         except OSError as e:
             messagebox.showerror(APP_TITLE, f"Could not open folder:\n{e}")
 
