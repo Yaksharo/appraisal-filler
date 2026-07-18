@@ -287,8 +287,14 @@ class Wizard(tk.Tk):
             self._guard_chrome_change()
             self.overrideredirect(True)
             self.update_idletasks()
-            self._set_appwindow_style()
             self.lift()
+            self.focus_force()
+            # Same reason _enable_custom_titlebar delays its own restyle:
+            # the taskbar-visibility style doesn't reliably take effect (and
+            # Explorer doesn't reliably notice it, including the "active"
+            # highlight) right after overrideredirect just recreated the
+            # window - applying it a beat later is what actually sticks.
+            self.after(30, self._set_appwindow_style)
 
     def _minimize(self):
         # iconify() needs decorations on Windows, so drop them briefly
