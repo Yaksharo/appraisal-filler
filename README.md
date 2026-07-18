@@ -5,7 +5,7 @@
 # Advisee Document Filler
 
 A small tool for UNP CCIT advisers that turns Periodic Grades Listing PDFs
-into filled Appraisal Sheets and Reports of Rating — as a standalone
+into filled Appraisal Sheets and Reports of Rating - as a standalone
 desktop app or a local web app.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -21,10 +21,10 @@ desktop app or a local web app.
 Every term, CCIT advisers have to turn the registrar's Periodic Grades
 Listing PDF into two official forms, by hand, for every advisee:
 
-- **Appraisal Sheet** (VPAA-CCIT-QF-05) — one per student, all terms in
+- **Appraisal Sheet** (VPAA-CCIT-QF-05) - one per student, all terms in
   one file, using the template that matches the student's course (BSCS,
   BSIT, BLIS or DCT), auto-detected from the PDF.
-- **Report of Rating** (VPAA-CCIT-QF-09) — one per student per term.
+- **Report of Rating** (VPAA-CCIT-QF-09) - one per student per term.
 
 Advisee Document Filler reads the grade listing PDFs, matches students
 across terms, and generates both documents automatically.
@@ -34,12 +34,12 @@ across terms, and generates both documents automatically.
 Filling these forms by hand is repetitive, error-prone, and doesn't scale
 past a handful of advisees. This tool exists so an adviser can point it at
 the PDFs the registrar already provides and get correctly formatted,
-ready-to-print documents back in a few clicks — no copy-pasting names and
+ready-to-print documents back in a few clicks - no copy-pasting names and
 grades between spreadsheets and Word templates.
 
 ## Features
 
-- ✓ Parses the registrar's Periodic Grades Listing PDF directly — no manual data entry
+- ✓ Parses the registrar's Periodic Grades Listing PDF directly - no manual data entry
 - ✓ Auto-detects course (BSCS, BSIT, BLIS, DCT) and picks the matching template
 - ✓ Matches students across multiple term PDFs by ID number
 - ✓ Fills Appraisal Sheets and Reports of Rating, with unused rows trimmed automatically
@@ -190,7 +190,7 @@ are fine; very old LTS releases may not be.
 
 Builds use PyInstaller's onedir mode: the app is a folder with the
 executable inside, next to an `_internal` folder. It starts in about a
-second — heavy libraries load lazily, so the window appears immediately
+second - heavy libraries load lazily, so the window appears immediately
 and the PDF engine loads in the background the first time you click Next.
 
 ## Usage
@@ -211,7 +211,7 @@ Generate), and the web app does the same work on a single page with a
    instructors per subject code (desktop: a dropdown/entry per code,
    pre-filled from names you've used before; web: one per line, like
    `CT103 = Cy Burr, MSIT`). The PDF has no instructor names, so the
-   Faculty and Instructor columns stay blank unless you map them — leaving
+   Faculty and Instructor columns stay blank unless you map them - leaving
    a faculty field empty also leaves it blank in the generated documents,
    it does not fall back to a placeholder name.
 5. Pick the output format. Individual gives one docx per student
@@ -223,7 +223,7 @@ Generate), and the web app does the same work on a single page with a
 ### Desktop app walkthrough
 
 A visual run-through of the wizard, start to finish. Screenshots live in
-[`docs/screenshots/`](docs/screenshots/) — see that folder's README if
+[`docs/screenshots/`](docs/screenshots/) - see that folder's README if
 you're updating them.
 
 <table>
@@ -324,12 +324,12 @@ files.
 ### Remembering names (local database)
 
 The app keeps a small local SQLite database (`store.db`, in the OS's
-standard per-user app-data folder — never bundled, never synced) of every
+standard per-user app-data folder - never bundled, never synced) of every
 Adviser, Dean and per-subject-code faculty name you've typed. Next time,
 those show up as suggestions: a dropdown you can pick from on the desktop
 app, or autocomplete on the web app, and the faculty step pre-fills any
 subject code it recognizes from a previous run. You can still type a new
-name at any time — nothing is required to already be in the list. Nothing
+name at any time - nothing is required to already be in the list. Nothing
 in this database ever leaves the machine.
 
 ### How the data maps
@@ -342,7 +342,7 @@ in this database ever leaves the machine.
 - Each Appraisal Sheet template has one term table per year/term the
   course actually has (DCT: First and Second Year only; the others also
   have Third Year, Mid Year and Fourth Year). Tables are filled in
-  chronological order — earliest school year first, 1st Term before 2nd —
+  chronological order - earliest school year first, 1st Term before 2nd -
   based on the Period line in each PDF, not on any year label in the PDF
   itself.
 - Whole year blocks (heading and table) that come after the student's

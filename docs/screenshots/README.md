@@ -3,7 +3,7 @@
 The main [README](../../README.md#desktop-app-walkthrough) links to screenshots
 in this folder. Save each one here under the exact filename listed below
 (PNG, same names the README already references) and they'll show up
-automatically — no other edits needed.
+automatically - no other edits needed.
 
 | Filename | What to capture |
 |---|---|
