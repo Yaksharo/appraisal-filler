@@ -219,12 +219,10 @@ class Wizard(tk.Tk):
         self.overrideredirect(True)
         self.update_idletasks()
         self._set_appwindow_style()
-        self._chrome_busy = False
         # style changes only take effect after the window is re-shown
         self.wm_withdraw()
         self.after(30, self._reshow_on_top)
         self.bind("<Map>", self._on_map)
-        self.bind("<Unmap>", self._on_unmap)
 
     def _set_appwindow_style(self):
         """Borderless windows lose their taskbar button and alt-tab entry
@@ -266,63 +264,36 @@ class Wizard(tk.Tk):
             pass
         self.focus_force()
 
-    def _guard_chrome_change(self):
-        """Suppress _on_map/_on_unmap briefly after we toggle
-        overrideredirect ourselves. On Windows that toggle tears down and
-        recreates the underlying window, which fires its own Map/Unmap
-        events - without this guard those synthetic events re-trigger the
-        same handlers and the window flickers between bordered/borderless
-        (and minimized/restored) forever. The synthetic events land on a
-        later pass through the event loop, not before this call returns,
-        so the flag has to be cleared on a delay rather than right away.
-        """
-        self._chrome_busy = True
-        self.after(250, lambda: setattr(self, "_chrome_busy", False))
-
     def _on_map(self, _event=None):
-        # restore borderless mode after un-minimizing from the taskbar,
-        # and re-apply the taskbar style (toggling decorations can drop it)
-        if (self._custom_titlebar and not self.overrideredirect()
-                and not self._chrome_busy):
-            self._guard_chrome_change()
-            self.overrideredirect(True)
-            self.update_idletasks()
+        # Bring the window to the foreground after being restored from
+        # the taskbar. overrideredirect is never toggled for minimize any
+        # more (see _minimize), so there's no decoration state to fix up
+        # here - the underlying window is never destroyed and recreated
+        # the way toggling overrideredirect would force it to be, so its
+        # taskbar style never gets lost in the first place.
+        if self._custom_titlebar:
             self.lift()
             self.focus_force()
-            # Same reason _enable_custom_titlebar delays its own restyle:
-            # the taskbar-visibility style doesn't reliably take effect (and
-            # Explorer doesn't reliably notice it, including the "active"
-            # highlight) right after overrideredirect just recreated the
-            # window - applying it a beat later is what actually sticks.
-            self.after(30, self._set_appwindow_style)
 
     def _minimize(self):
-        # iconify() needs decorations on Windows, so drop them briefly
-        self._guard_chrome_change()
-        self.overrideredirect(False)
-        self.iconify()
-
-    def _on_unmap(self, _event=None):
-        # Minimizing via the taskbar icon (or Win+Down, or the taskbar's
-        # own right-click menu) bypasses _minimize() and asks Windows to
-        # iconify the window directly. A borderless (overrideredirect)
-        # window has no caption/minimize-box styling, so Windows can't
-        # iconify it properly and the window just disappears instead -
-        # drop the borderless style here too so any minimize path leaves
-        # it in a state Windows can actually restore from. Only do this
-        # for a *real* minimize (wm state actually "iconic"): overrideredirect
-        # windows can fire spurious Unmap events (e.g. from the chrome
-        # toggle above recreating the window) that aren't a minimize at all.
-        if not (self._custom_titlebar and self.overrideredirect()
-                and not self._chrome_busy):
-            return
+        """Minimize via a raw Win32 ShowWindow call instead of Tk's own
+        iconify(), which Tk won't apply properly to a borderless
+        (overrideredirect) window - iconify() silently needs real window
+        decorations to work, which is what previously forced toggling
+        overrideredirect off and back on around every minimize/restore.
+        That toggle tears down and recreates the underlying window on
+        Windows, which is what caused the taskbar icon to flicker,
+        vanish, or lose its "active" highlight. Calling ShowWindow
+        directly operates on the same window throughout - nothing is
+        ever destroyed or recreated, so there's nothing to fix up after.
+        """
         try:
-            is_iconic = self.state() == "iconic"
-        except tk.TclError:
-            return
-        if is_iconic:
-            self._guard_chrome_change()
-            self.overrideredirect(False)
+            import ctypes
+            SW_MINIMIZE = 6
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+            ctypes.windll.user32.ShowWindow(hwnd, SW_MINIMIZE)
+        except Exception:
+            self.iconify()
 
     def _toggle_zoom(self):
         if self._is_zoomed:
