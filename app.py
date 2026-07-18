@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, send_file
 
 import parser as grade_parser
 import filler
+import status_report
 import store
 from version import app_version
 
@@ -15,6 +16,7 @@ app.jinja_env.globals["app_version"] = app_version
 
 DOCX_MIME = ("application/vnd.openxmlformats-officedocument"
              ".wordprocessingml.document")
+PDF_MIME = "application/pdf"
 
 
 def _safe(name):
@@ -75,6 +77,7 @@ def generate():
 
     make_appraisal = "appraisal" in request.form.getlist("docs")
     make_report = "report" in request.form.getlist("docs")
+    make_status_report = "status_report" in request.form.getlist("docs")
     adviser = request.form.get("adviser", "").strip()
     dean = request.form.get("dean", "").strip()
     if not adviser or not dean:
@@ -93,11 +96,21 @@ def generate():
     students = [s for sid, s in sorted(merged.items(),
                                        key=lambda kv: kv[1]["name"])
                 if not only_ids or sid in only_ids]
+    all_students = [s for _sid, s in sorted(merged.items(),
+                                             key=lambda kv: kv[1]["name"])]
 
     def term_selected(term, sy):
         return not only_terms or _term_key_str(term, sy) in only_terms
 
-    outputs = []  # list of (zip_path, filename, bytes)
+    outputs = []  # list of (zip_path, filename, bytes, mime_type)
+
+    # The status report deliberately covers every student found in the
+    # uploaded listings. A student excluded from individual forms should not
+    # silently disappear from a report meant to surface missing enrollment or
+    # grade-status records.
+    if make_status_report:
+        buf = status_report.build_status_report_pdf(all_students)
+        outputs.append(("", "Student_Status_Report.pdf", buf.read(), PDF_MIME))
 
     if output_mode == "combined":
         if make_appraisal:
@@ -105,7 +118,8 @@ def generate():
                     for s in students]
             buf = filler.combine_documents(docs)
             if buf:
-                outputs.append(("", "Appraisal_Sheets_ALL.docx", buf.read()))
+                outputs.append(("", "Appraisal_Sheets_ALL.docx", buf.read(),
+                                DOCX_MIME))
         if make_report:
             all_terms = sorted({k for s in students for k in s["terms"]})
             for term, sy in all_terms:
@@ -119,14 +133,15 @@ def generate():
                     tslug = term.replace(" ", "")
                     outputs.append(
                         ("", f"Report_of_Rating_{tslug}_{sy}_ALL.docx",
-                         buf.read()))
+                         buf.read(), DOCX_MIME))
     else:
         for s in students:
             base = _safe(s["name"])
             if make_appraisal:
                 buf = filler.fill_appraisal(s, faculty_map, adviser, dean)
                 outputs.append(("Appraisal_Sheets/",
-                                f"{base}_{s['id']}.docx", buf.read()))
+                                f"{base}_{s['id']}.docx", buf.read(),
+                                DOCX_MIME))
             if make_report:
                 for (term, sy), subjects in sorted(s["terms"].items()):
                     if not term_selected(term, sy):
@@ -135,20 +150,23 @@ def generate():
                                              faculty_map, adviser, dean, trim_rows)
                     tslug = term.replace(" ", "")
                     outputs.append((f"Reports_of_Rating/{tslug}_{sy}/",
-                                    f"{base}_{s['id']}.docx", buf.read()))
+                                    f"{base}_{s['id']}.docx", buf.read(),
+                                    DOCX_MIME))
 
     if not outputs:
         return "Nothing to generate. Check your selections.", 400
 
-    # single combined file: send the docx directly, no zip needed
-    if len(outputs) == 1 and output_mode == "combined":
-        _, fname, data = outputs[0]
+    # A single batch document or the PDF-only report can be downloaded
+    # directly; combinations are returned together in a ZIP file.
+    if len(outputs) == 1 and (output_mode == "combined" or
+                              outputs[0][3] == PDF_MIME):
+        _, fname, data, mime_type = outputs[0]
         return send_file(io.BytesIO(data), as_attachment=True,
-                         download_name=fname, mimetype=DOCX_MIME)
+                         download_name=fname, mimetype=mime_type)
 
     zbuf = io.BytesIO()
     with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for folder, fname, data in outputs:
+        for folder, fname, data, _mime_type in outputs:
             zf.writestr(folder + fname, data)
     zbuf.seek(0)
     return send_file(zbuf, as_attachment=True,

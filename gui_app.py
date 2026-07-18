@@ -23,15 +23,18 @@ from version import app_version
 # lazily on first use so the window appears immediately.
 grade_parser = None
 filler = None
+status_report = None
 
 
 def _load_engine():
-    global grade_parser, filler
+    global grade_parser, filler, status_report
     if grade_parser is None:
         import parser as _gp
         import filler as _fl
+        import status_report as _sr
         grade_parser = _gp
         filler = _fl
+        status_report = _sr
 
 
 def resource_path(rel):
@@ -142,6 +145,7 @@ class Wizard(tk.Tk):
         self.term_vars = {}
         self.doc_appraisal = tk.BooleanVar(value=True)
         self.doc_report = tk.BooleanVar(value=True)
+        self.doc_status_report = tk.BooleanVar(value=True)
         self.output_mode = tk.StringVar(value="individual")
         self.trim_rows = tk.BooleanVar(value=True)
         self.adviser = tk.StringVar()
@@ -805,6 +809,17 @@ class Wizard(tk.Tk):
         ttk.Checkbutton(box1, text="Report of Rating (one per student per "
                                    "term)",
                         variable=self.doc_report).pack(anchor="w", pady=2)
+        ttk.Checkbutton(box1, text="Student Status Summary (one PDF)",
+                        variable=self.doc_status_report).pack(anchor="w",
+                                                               pady=2)
+        ttk.Label(box1, text="The PDF summarizes incomplete, dropped and "
+                              "other flagged grades for every student found "
+                              "in the loaded PDFs. It also marks students "
+                              "missing from the latest uploaded term for "
+                              "review; this is not an official enrollment "
+                              "decision.",
+                  style="Card.TLabel", wraplength=760,
+                  justify="left").pack(anchor="w", pady=(4, 2))
 
         box2 = ttk.LabelFrame(inner, text="Terms to include (Report of "
                                           "Rating)", padding=10)
@@ -835,7 +850,8 @@ class Wizard(tk.Tk):
                   style="Card.TLabel").pack(anchor="w", pady=2)
 
     def _leave_documents(self):
-        if not (self.doc_appraisal.get() or self.doc_report.get()):
+        if not (self.doc_appraisal.get() or self.doc_report.get() or
+                self.doc_status_report.get()):
             messagebox.showwarning(APP_TITLE,
                                    "Pick at least one document type.")
             return False
@@ -910,15 +926,21 @@ class Wizard(tk.Tk):
             docs.append("Appraisal Sheet")
         if self.doc_report.get():
             docs.append("Report of Rating")
+        if self.doc_status_report.get():
+            docs.append("Student Status Summary (PDF)")
         mode = ("individual files" if self.output_mode.get() == "individual"
                 else "one batch file per document type")
+        status_scope = (f"\nStatus report scope: all {len(self.merged)} "
+                        "students found in the PDFs"
+                        if self.doc_status_report.get() else "")
         summary = (f"Students: {n_students}\n"
                    f"Documents: {', '.join(docs)}\n"
                    f"Terms for ROR: "
                    f"{', '.join(f'{t} {sy}' for t, sy in picked_terms)}\n"
                    f"Output: {mode}\n"
                    f"Trim blank ROR rows: "
-                   f"{'yes' if self.trim_rows.get() else 'no'}")
+                   f"{'yes' if self.trim_rows.get() else 'no'}"
+                   f"{status_scope}")
         box = ttk.LabelFrame(f, text="Review your choices", padding=10)
         box.pack(fill="x", pady=6)
         ttk.Label(box, text=summary, justify="left",
@@ -999,6 +1021,8 @@ class Wizard(tk.Tk):
                 self.merged.items(), key=lambda kv: kv[1]["name"])
                 if self.student_vars.get(sid) is not None
                 and self.student_vars[sid].get()],
+            "all_students": [s for _sid, s in sorted(
+                self.merged.items(), key=lambda kv: kv[1]["name"])],
             "faculty_map": faculty_map,
             "adviser": self.adviser.get().strip(),
             "dean": self.dean.get().strip(),
@@ -1007,6 +1031,7 @@ class Wizard(tk.Tk):
             "mode": self.output_mode.get(),
             "appraisal": self.doc_appraisal.get(),
             "report": self.doc_report.get(),
+            "status_report": self.doc_status_report.get(),
             "term_keys": list(self.term_keys),
         }
         self.btn_generate.config(state="disabled")
@@ -1037,6 +1062,8 @@ class Wizard(tk.Tk):
                         for key in sorted(s["terms"]):
                             if key in cfg["picked"]:
                                 jobs.append(("report", (s, key)))
+            if cfg["status_report"]:
+                jobs.append(("status_report", None))
 
             total = len(jobs)
             self._ui(lambda: self.progress.config(maximum=max(total, 1),
@@ -1107,6 +1134,11 @@ class Wizard(tk.Tk):
                 fname = f"Report_of_Rating_{tslug}_{sy}_ALL.docx"
                 with open(os.path.join(out_root, fname), "wb") as fh:
                     fh.write(buf.read())
+        elif kind == "status_report":
+            buf = status_report.build_status_report_pdf(cfg["all_students"])
+            with open(os.path.join(out_root, "Student_Status_Report.pdf"),
+                      "wb") as fh:
+                fh.write(buf.read())
 
     # ------------------------------------------------------------ helpers
     def _ui(self, fn):
