@@ -29,11 +29,11 @@ Listing PDF into two official forms, by hand, for every advisee:
 Advisee Document Filler reads the grade listing PDFs, matches students
 across terms, and generates both documents automatically.
 
-## Why I Built This
+## Motivation
 
 Filling these forms by hand is repetitive, error-prone, and doesn't scale
 past a handful of advisees. This tool exists so an adviser can point it at
-the PDFs the registrar already provides and get correctly formatted,
+the PDFs the SIAS already provides and get correctly formatted,
 ready-to-print documents back in a few clicks - no copy-pasting names and
 grades between spreadsheets and Word templates.
 
@@ -61,7 +61,7 @@ flowchart TD
     F --> G[docx output: individual files or one merged batch]
 ```
 
-1. You add one or more grade listing PDFs and enter the Adviser and Dean.
+1. One or more grade listing PDFs are added, along with the Adviser and Dean names.
 2. The parser reads each PDF, matching students by ID number across terms.
 3. The course found in each PDF picks the matching Appraisal Sheet template.
 4. Both documents are filled and blank rows are trimmed automatically.
@@ -123,7 +123,7 @@ appraisal-filler/
 
 ### A. Standalone desktop app (recommended, no browser)
 
-A step-by-step wizard. No web server, no network, nothing exposed.
+A step-by-step wizard, with no web server, no network, nothing exposed.
 
 From source:
 
@@ -132,23 +132,25 @@ pip install -r requirements.txt
 python gui_app.py
 ```
 
-On Linux you also need Tkinter once: `sudo apt install python3-tk`
+Tkinter is required once on Linux: `sudo apt install python3-tk`
 
-As a single-file executable (no Python needed on the target machine):
+Also available as a single-file executable, with no Python needed on the
+target machine:
 
-- Windows: run `build_windows.bat`, then use `dist\AdviseeDocFiller.exe`
-- Linux: run `./build_linux.sh`, then use `dist/AdviseeDocFiller`
+- Windows: `build_windows.bat` produces `dist\AdviseeDocFiller.exe`
+- Linux: `build_linux.sh` produces `dist/AdviseeDocFiller`
 
-Build on the OS you target. PyInstaller does not cross-compile, so the
-Windows exe must be built on Windows and the Linux binary on Linux. A
+Each is built on the OS it targets - PyInstaller does not cross-compile,
+so the Windows exe is built on Windows and the Linux binary on Linux. A
 Linux binary runs on distros with the same or newer glibc than the
 build machine.
 
 Generated documents default to an `AdviseeDocuments` folder inside the
-user's real Documents folder (`Documents\AdviseeDocuments` on Windows,
-resolved even if OneDrive or a domain policy has redirected it;
+real Documents folder (`Documents\AdviseeDocuments` on Windows, resolved
+even if OneDrive or a domain policy has redirected it;
 `~/Documents/AdviseeDocuments` on Linux, following the XDG user-dirs
-setting). Use "Browse..." on the Generate step to save elsewhere.
+setting). The output location can be changed via "Browse..." on the
+Generate step.
 
 ### B. Web app (optional)
 
@@ -157,24 +159,24 @@ pip install -r requirements.txt
 python app.py
 ```
 
-It binds to 127.0.0.1 only (loopback, not visible to your network) and
-picks a free port in the dynamic private range (49152-65535). The exact
-address is printed on start.
+It binds to 127.0.0.1 only (loopback, not visible to the network) and
+picks a free port in the dynamic private range (49152-65535), with the
+exact address printed on start.
 
 ### Prebuilt releases
 
 **Windows**, two options from the same build:
 
-1. Installer: run `AdviseeDocFiller-Setup-1.0.exe`. It installs to
+1. Installer: `AdviseeDocFiller-Setup-1.0.exe` installs to
    `C:\Program Files\Yaksharo Solutions\Advisee Document Filler`, adds a
    Start Menu entry (and optional desktop icon), and registers a normal
    uninstaller in Windows Settings.
-2. Portable: download `AdviseeDocFiller-windows-portable.zip`, extract
-   it once anywhere (USB stick included), run `AdviseeDocFiller.exe`
-   inside. Copy-paste the folder to move it. Keep the exe next to its
-   `_internal` folder.
+2. Portable: `AdviseeDocFiller-windows-portable.zip` extracts once
+   anywhere (USB stick included), with `AdviseeDocFiller.exe` runnable
+   directly inside. The folder can be copy-pasted to move it, as long as
+   the exe stays next to its `_internal` folder.
 
-**Linux portable:** `AdviseeDocFiller-linux.tar.gz`, extract and run.
+**Linux portable:** `AdviseeDocFiller-linux.tar.gz` extracts and runs.
 
 **Linux packages** (built for the three big families, attached to Releases):
 
