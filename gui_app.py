@@ -215,6 +215,7 @@ class Wizard(tk.Tk):
         self.overrideredirect(True)
         self.update_idletasks()
         self._set_appwindow_style()
+        self._chrome_busy = False
         # style changes only take effect after the window is re-shown
         self.wm_withdraw()
         self.after(30, self._reshow_on_top)
@@ -247,10 +248,25 @@ class Wizard(tk.Tk):
             pass
         self.focus_force()
 
+    def _guard_chrome_change(self):
+        """Suppress _on_map/_on_unmap briefly after we toggle
+        overrideredirect ourselves. On Windows that toggle tears down and
+        recreates the underlying window, which fires its own Map/Unmap
+        events - without this guard those synthetic events re-trigger the
+        same handlers and the window flickers between bordered/borderless
+        (and minimized/restored) forever. The synthetic events land on a
+        later pass through the event loop, not before this call returns,
+        so the flag has to be cleared on a delay rather than right away.
+        """
+        self._chrome_busy = True
+        self.after(250, lambda: setattr(self, "_chrome_busy", False))
+
     def _on_map(self, _event=None):
         # restore borderless mode after un-minimizing from the taskbar,
         # and re-apply the taskbar style (toggling decorations can drop it)
-        if self._custom_titlebar and not self.overrideredirect():
+        if (self._custom_titlebar and not self.overrideredirect()
+                and not self._chrome_busy):
+            self._guard_chrome_change()
             self.overrideredirect(True)
             self.update_idletasks()
             self._set_appwindow_style()
@@ -258,6 +274,7 @@ class Wizard(tk.Tk):
 
     def _minimize(self):
         # iconify() needs decorations on Windows, so drop them briefly
+        self._guard_chrome_change()
         self.overrideredirect(False)
         self.iconify()
 
@@ -268,8 +285,19 @@ class Wizard(tk.Tk):
         # window has no caption/minimize-box styling, so Windows can't
         # iconify it properly and the window just disappears instead -
         # drop the borderless style here too so any minimize path leaves
-        # it in a state Windows can actually restore from.
-        if self._custom_titlebar and self.overrideredirect():
+        # it in a state Windows can actually restore from. Only do this
+        # for a *real* minimize (wm state actually "iconic"): overrideredirect
+        # windows can fire spurious Unmap events (e.g. from the chrome
+        # toggle above recreating the window) that aren't a minimize at all.
+        if not (self._custom_titlebar and self.overrideredirect()
+                and not self._chrome_busy):
+            return
+        try:
+            is_iconic = self.state() == "iconic"
+        except tk.TclError:
+            return
+        if is_iconic:
+            self._guard_chrome_change()
             self.overrideredirect(False)
 
     def _toggle_zoom(self):
