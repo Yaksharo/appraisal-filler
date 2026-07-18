@@ -204,16 +204,18 @@ def build_appraisal(student, faculty_map=None, adviser="", dean=""):
         label = term_sy_label(term, sy)
 
         def set_row(row, subj, label=label):
-            _set_cell(row.cells[0], subj["code"], center=True)
-            _set_cell(row.cells[1], subj["title"])
-            _set_cell(row.cells[2], subj["units"], center=True)
-            _set_cell(row.cells[3], subj["grade"], center=True)
-            _set_cell(row.cells[4], faculty_map.get(subj["code"].replace(" ", ""), ""))
-            _set_cell(row.cells[5], label, center=True)
+            _set_cell(row.cells[0], subj["code"], size=8, center=True)
+            _set_cell(row.cells[1], subj["title"], size=8)
+            _set_cell(row.cells[2], subj["units"], size=8, center=True)
+            _set_cell(row.cells[3], subj["grade"], size=8, center=True)
+            _set_cell(row.cells[4],
+                      faculty_map.get(subj["code"].replace(" ", ""), ""), size=8)
+            _set_cell(row.cells[5], label, size=8, center=True)
 
         _fill_table_rows(table, subjects, 1, set_row, trim=True)
         totals = table.rows[-1]
-        _set_cell(totals.cells[2], _total_units(subjects), center=True, bold=True)
+        _set_cell(totals.cells[2], _total_units(subjects), size=8, center=True,
+                  bold=True)
 
     n_used = min(len(keys), n_slots)
     # A year group can be kept (its first table has data) while its second
@@ -223,7 +225,7 @@ def build_appraisal(student, faculty_map=None, adviser="", dean=""):
     for slot in range(n_used, n_slots):
         table = doc.tables[slot]
         _fill_table_rows(table, [], 1, lambda row, subj: None, trim=True)
-        _set_cell(table.rows[-1].cells[2], _total_units([]), center=True,
+        _set_cell(table.rows[-1].cells[2], _total_units([]), size=8, center=True,
                   bold=True)
 
     _remove_unused_year_groups(doc, n_used)
