@@ -220,6 +220,107 @@ Generate), and the web app does the same work on a single page with a
 6. For Reports of Rating you can also untick terms you don't need.
 7. Click Generate.
 
+### Desktop app walkthrough
+
+A visual run-through of the wizard, start to finish. Screenshots live in
+[`docs/screenshots/`](docs/screenshots/) — see that folder's README if
+you're updating them.
+
+<table>
+<tr><td width="45%">
+
+**1. Launch the app**
+
+Start Menu (if installed) &rarr; Yaksharo Solutions &rarr;
+Advisee Document Filler. Portable and Linux builds launch the same way
+from their extracted folder or menu entry.
+
+</td><td><img src="docs/screenshots/01-launch.png" alt="Start Menu entry for Advisee Document Filler"></td></tr>
+<tr><td>
+
+**2. Step 1 - PDF Files**
+
+The wizard opens here. Enter the Adviser and Dean name (both required -
+printed on the signature lines of both documents and remembered for next
+time).
+
+</td><td><img src="docs/screenshots/02-step1-blank.png" alt="Step 1, PDF Files, before anything is filled in"></td></tr>
+<tr><td>
+
+**3. Add the grade listing PDFs**
+
+Click "Add PDF files..." and pick one or more Periodic Grades Listing
+PDFs from the student portal - 1st and 2nd term (and beyond) can be added
+together in one go.
+
+</td><td><img src="docs/screenshots/03-step1-file-picker.png" alt="File picker dialog for selecting grade listing PDFs"></td></tr>
+<tr><td>
+
+**4. Ready to parse**
+
+With the names filled in and the PDFs listed, click "Next >". Select a
+file and click "Remove selected" if you added the wrong one.
+
+</td><td><img src="docs/screenshots/04-step1-filled.png" alt="Step 1 filled in with Adviser, Dean, and a list of PDFs"></td></tr>
+<tr><td>
+
+**5. Parsing**
+
+The PDFs are read on a background thread, so the window stays responsive
+while it works.
+
+</td><td><img src="docs/screenshots/05-parsing.png" alt="Reading PDFs, please wait status in the nav bar"></td></tr>
+<tr><td>
+
+**6. Step 2 - Students**
+
+Every student found across the PDFs, matched by ID number. Untick anyone
+you want to skip, or use Select all / Select none.
+
+</td><td><img src="docs/screenshots/06-step2-students.png" alt="Step 2, Students, parsed student list"></td></tr>
+<tr><td>
+
+**7. Step 3 - Documents**
+
+Choose which documents to generate, which terms to include on the Report
+of Rating, and the output format (individual files vs. one merged batch
+file for bulk printing).
+
+</td><td><img src="docs/screenshots/07-step3-documents.png" alt="Step 3, Documents, document types, terms, and output format"></td></tr>
+<tr><td>
+
+**8. Step 4 - Faculty**
+
+Every subject code found in the PDFs, with a Faculty name field for each.
+Pick a name you've used before or type a new one; leaving one blank
+leaves that column blank in the generated documents.
+
+</td><td><img src="docs/screenshots/08-step4-faculty.png" alt="Step 4, Faculty, subject code to faculty name table"></td></tr>
+<tr><td>
+
+**9. Step 5 - Review and generate**
+
+Double-check the summary, set (or Browse to) the output folder, and click
+"Generate documents".
+
+</td><td><img src="docs/screenshots/09-step5-review.png" alt="Step 5, Generate, review box before generating"></td></tr>
+<tr><td>
+
+**10. Generating**
+
+A progress bar tracks each document as it's written.
+
+</td><td><img src="docs/screenshots/10-step5-progress.png" alt="Step 5 progress bar while documents are being generated"></td></tr>
+<tr><td>
+
+**11. Done**
+
+Click "Open output folder" to jump straight to the generated `.docx`
+files.
+
+</td><td><img src="docs/screenshots/11-step5-done.png" alt="Step 5 done status with the output folder open"></td></tr>
+</table>
+
 ### Remembering names (local database)
 
 The app keeps a small local SQLite database (`store.db`, in the OS's
