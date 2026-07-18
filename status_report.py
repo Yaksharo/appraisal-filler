@@ -5,7 +5,9 @@ student-enrollment status.  This module therefore keeps the raw grade codes
 visible and labels any roster comparison as an inference for adviser review.
 """
 import io
+import os
 import re
+import sys
 from datetime import datetime
 from html import escape
 
@@ -14,8 +16,53 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
                                 TableStyle)
+
+# Match the Calibri used throughout the docx outputs (filler.py's FONT).
+# ReportLab needs an actual font file registered under the name it uses,
+# unlike python-docx which just stores a name hint for Word to resolve -
+# so this looks for Calibri itself on Windows, or Carlito (its
+# metric-compatible open-source equivalent, commonly installed alongside
+# LibreOffice) on Linux, and falls back to the always-available Helvetica
+# if neither is found.
+FONT = "Helvetica"
+FONT_BOLD = "Helvetica-Bold"
+
+
+def _register_calibri():
+    global FONT, FONT_BOLD
+    if sys.platform.startswith("win"):
+        fonts_dir = os.path.join(os.environ.get("WINDIR", r"C:\Windows"),
+                                 "Fonts")
+        pairs = [(os.path.join(fonts_dir, "calibri.ttf"),
+                 os.path.join(fonts_dir, "calibrib.ttf"))]
+    else:
+        pairs = [
+            ("/usr/share/fonts/truetype/crosextra/Carlito-Regular.ttf",
+             "/usr/share/fonts/truetype/crosextra/Carlito-Bold.ttf"),
+            ("/usr/share/fonts/carlito/Carlito-Regular.ttf",
+             "/usr/share/fonts/carlito/Carlito-Bold.ttf"),
+        ]
+    for regular, bold in pairs:
+        if not os.path.exists(regular):
+            continue
+        try:
+            pdfmetrics.registerFont(TTFont("Calibri", regular))
+            FONT = "Calibri"
+            if os.path.exists(bold):
+                pdfmetrics.registerFont(TTFont("Calibri-Bold", bold))
+                FONT_BOLD = "Calibri-Bold"
+            else:
+                FONT_BOLD = "Calibri"
+        except Exception:
+            FONT, FONT_BOLD = "Helvetica", "Helvetica-Bold"
+        return
+
+
+_register_calibri()
 
 
 # Categories intentionally overlap: a student can have more than one
@@ -199,7 +246,7 @@ def _footer(canvas, doc):
     canvas.line(doc.leftMargin, 10 * mm, doc.pagesize[0] - doc.rightMargin,
                 10 * mm)
     canvas.setFillColor(colors.HexColor("#4B5563"))
-    canvas.setFont("Helvetica", 7)
+    canvas.setFont(FONT, 7)
     canvas.drawString(doc.leftMargin, 6 * mm, "Student Status Summary")
     canvas.drawRightString(doc.pagesize[0] - doc.rightMargin, 6 * mm,
                            f"Page {canvas.getPageNumber()}")
@@ -219,32 +266,34 @@ def build_status_report_pdf(students):
         author="Advisee Document Filler",
     )
 
+    # Every table (summary and per-category detail) shares one font size,
+    # matching the 8pt used throughout the docx outputs' tables.
     base = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        "StatusTitle", parent=base["Title"], fontName="Helvetica-Bold",
+        "StatusTitle", parent=base["Title"], fontName=FONT_BOLD,
         fontSize=17, leading=21, textColor=colors.HexColor("#0F3D66"),
         spaceAfter=2 * mm,
     )
     subtitle_style = ParagraphStyle(
-        "StatusSubtitle", parent=base["Normal"], fontName="Helvetica",
+        "StatusSubtitle", parent=base["Normal"], fontName=FONT,
         fontSize=8.5, leading=11, textColor=colors.HexColor("#4B5563"),
         spaceAfter=2 * mm,
     )
     section_style = ParagraphStyle(
-        "StatusSection", parent=base["Heading2"], fontName="Helvetica-Bold",
+        "StatusSection", parent=base["Heading2"], fontName=FONT_BOLD,
         fontSize=11, leading=14, textColor=colors.HexColor("#0F3D66"),
         spaceBefore=5 * mm, spaceAfter=1 * mm,
     )
     detail_style = ParagraphStyle(
-        "StatusDetail", parent=base["Normal"], fontName="Helvetica",
-        fontSize=7.2, leading=9, textColor=colors.HexColor("#111827"),
+        "StatusDetail", parent=base["Normal"], fontName=FONT,
+        fontSize=8, leading=10, textColor=colors.HexColor("#111827"),
     )
     table_header_style = ParagraphStyle(
-        "StatusTableHeader", parent=detail_style, fontName="Helvetica-Bold",
-        fontSize=7.2, leading=8.5, textColor=colors.white,
+        "StatusTableHeader", parent=detail_style, fontName=FONT_BOLD,
+        fontSize=8, leading=9.5, textColor=colors.white,
     )
     summary_header_style = ParagraphStyle(
-        "StatusSummaryHeader", parent=detail_style, fontName="Helvetica-Bold",
+        "StatusSummaryHeader", parent=detail_style, fontName=FONT_BOLD,
         fontSize=8, leading=9.5, textColor=colors.white, alignment=TA_CENTER,
     )
     summary_cell_style = ParagraphStyle(
