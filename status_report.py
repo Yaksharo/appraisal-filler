@@ -153,6 +153,42 @@ def _record(student, term_key, subject=None, note="", grade=""):
     }
 
 
+def _join_with_and(items):
+    """['A', 'B', 'C'] -> 'A, B, and C' (and 'A and B' for exactly two)."""
+    if len(items) <= 1:
+        return items[0] if items else ""
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
+
+
+def _merge_records_by_student_term(records):
+    """Collapse multiple subject-level rows for the same student and term
+    within a category into one row, so a student with several affected
+    subjects doesn't repeat their name/ID/course/term on every line - the
+    affected subjects are listed together in the "Subject / note" cell
+    instead. Only for display: category student/record counts are computed
+    from the original per-subject records, before this merge.
+    """
+    groups, order = {}, []
+    for row in records:
+        key = (row["id"], row["term"])
+        if key not in groups:
+            groups[key] = {**row, "subject": [], "grade": []}
+            order.append(key)
+        group = groups[key]
+        group["subject"].append(row["subject"])
+        if row["grade"] not in group["grade"]:
+            group["grade"].append(row["grade"])
+    merged = []
+    for key in order:
+        group = groups[key]
+        group["subject"] = _join_with_and(group["subject"])
+        group["grade"] = ", ".join(group["grade"])
+        merged.append(group)
+    return merged
+
+
 def _category_for_grade(grade):
     """Classify one final-grade value without assigning hidden meanings."""
     grade = (grade or "").strip().upper()
@@ -336,7 +372,7 @@ def build_status_report_pdf(students):
             _paragraph(category["record_count"], summary_number_style),
         ])
     summary = Table(summary_data, colWidths=[178 * mm, 28 * mm, 28 * mm],
-                    repeatRows=1, hAlign="LEFT")
+                    repeatRows=1, hAlign="CENTER")
     summary.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F3D66")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -368,7 +404,7 @@ def build_status_report_pdf(students):
         story.append(_paragraph(category["description"], subtitle_style))
         detail_data = [[_paragraph(label, table_header_style)
                         for label in detail_headers]]
-        for row in category["records"]:
+        for row in _merge_records_by_student_term(category["records"]):
             detail_data.append([
                 _paragraph(row["name"], detail_style),
                 _paragraph(row["id"], detail_style),
