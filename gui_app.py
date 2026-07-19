@@ -222,7 +222,6 @@ class Wizard(tk.Tk):
         # style changes only take effect after the window is re-shown
         self.wm_withdraw()
         self.after(30, self._reshow_on_top)
-        self.bind("<Map>", self._on_map)
 
     def _set_appwindow_style(self):
         """Borderless windows lose their taskbar button and alt-tab entry
@@ -263,17 +262,6 @@ class Wizard(tk.Tk):
         except tk.TclError:
             pass
         self.focus_force()
-
-    def _on_map(self, _event=None):
-        # Bring the window to the foreground after being restored from
-        # the taskbar. overrideredirect is never toggled for minimize any
-        # more (see _minimize), so there's no decoration state to fix up
-        # here - the underlying window is never destroyed and recreated
-        # the way toggling overrideredirect would force it to be, so its
-        # taskbar style never gets lost in the first place.
-        if self._custom_titlebar:
-            self.lift()
-            self.focus_force()
 
     def _minimize(self):
         """Minimize via a raw Win32 ShowWindow call instead of Tk's own
